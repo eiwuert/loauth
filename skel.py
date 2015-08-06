@@ -5,6 +5,10 @@ from BaseHTTPServer import BaseHTTPRequestHandler
 from BaseHTTPServer import HTTPServer
 from oauthlib.oauth2 import RequestValidator
 from oauthlib.oauth2 import WebApplicationServer
+from oauthlib.oauth2.rfc6749.errors import InvalidClientIdError
+from oauthlib.oauth2.rfc6749.errors import InvalidRequestError
+from oauthlib.oauth2.rfc6749.errors import MissingClientIdError
+from oauthlib.oauth2.rfc6749.errors import UnsupportedResponseTypeError
 from sys import exit
 
 def mysql_execute(command):
@@ -42,18 +46,31 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
 	def do_GET(self):
 		authserver = WebApplicationServer(LocalboxRequestValidator())
 		content_length = self.headers.getheader('Content-Length',0)
-		print content_length
 		body = self.rfile.read(content_length)
 		print "GETTINGUH"
-		if self.path == "/auth":
-
+		try:
 			result = authserver.validate_authorization_request(self.path, self.command, body, self.headers.dict)
+			self.send_response(200)
 			for key, value in result[1].iteritems():
 				self.send_header(key, value)
-		self.send_response(200)
-		self.send_header("Content-type", "text/html")
-		self.end_headers()
-		#self.wfile.write(body)
+			self.send_header("Content-type", "text/html")
+			self.end_headers()
+		except InvalidClientIdError as e:
+			self.send_error(400, "Invalid client_id")
+			self.send_header("Content-type", "text/html")
+			self.end_headers()
+		except MissingClientIdError as e:
+			self.send_error(400, "Missing client_id")
+			self.send_header("Content-type", "text/html")
+			self.end_headers()
+		except UnsupportedResponseTypeError as e:
+			self.send_error(400, "Header response_type must be 'code'") #or others which the standard allow
+			self.send_header("Content-type", "text/html")
+			self.end_headers()
+		except InvalidRequestError as e:
+			self.send_error(400, "Sent response_type header invalid")
+			self.send_header("Content-type", "text/html")
+			self.end_headers()
 		print "DONNU GET"
 		return
 
