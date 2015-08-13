@@ -22,6 +22,17 @@ from oauthlib.oauth2.rfc6749.errors import UnauthorizedClientError
 from traceback import format_stack
 
 
+import logging
+import sys
+log = logging.getLogger('oauthlib')
+log.addHandler(logging.StreamHandler(sys.stdout))
+log.setLevel(logging.DEBUG)
+
+
+class ClientStub:
+    def __init__(self, client_id):
+        self.client_id = client_id
+
 def mysql_execute(command):
     """
     Function to execute a sql statement on the mysql database
@@ -70,7 +81,7 @@ class LocalboxRequestValidator(RequestValidator):
         """
         TODO: save authcode
         """
-        print "save authorization code"
+        print "NEW: save authorization code"
         pprint(code)
 
 
@@ -93,7 +104,7 @@ class LocalboxRequestValidator(RequestValidator):
         returns security scopes.
         """
         print "get default scopes"
-        return ''
+        return 'all'
 
     def validate_scopes(self, client_id, scopes, client, request, *args,
                         **kwargs):
@@ -104,7 +115,14 @@ class LocalboxRequestValidator(RequestValidator):
         return True
 
     def authenticate_client(self, request, *args, **kwargs):
-        print "NEW: authenticate client"
+        print "NEW: authenticate client WOOTISDOEWATIWANTZ"
+        authorization_header_contents = request.headers['authorization']
+        if http_authenticate(authorization_header_contents):
+            if not request.client:
+                request.client = ClientStub(u'10')
+            return True
+        else:
+            return False
 
     def authenticate_client_id(self, client_id, request, *args, **kwargs):
         print "NEW: authenticate client id"
@@ -121,14 +139,24 @@ class LocalboxRequestValidator(RequestValidator):
         print "NEW: validate bearer token"
     def validate_code(self, client_id, code, client, request, *args, **kwargs):
         print "NEW: validate code"
+        #OBS! The request.user attribute should be set to the resource owner
+        #associated with this authorization code. Similarly request.scopes and
+        #request.state must also be set.
+        request.scopes=""
+	request.state=""
+        return True
     def validate_grant_type(self, client_id, grant_type, client, request, *args, **kwargs):
         print "NEW: validate grant type"
+        return True
     def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
         print "NEW: validate refresh token"
     def validate_user(self, username, password, client, request, *args, **kwargs):
         print "NEW: validate user"
 
-
+    def confirm_redirect_uri(self, client_id, code, redirect_uri, client,
+            *args, **kwargs):
+        print "NEW: confirm redirect uri (altered to actually be callable)"
+        return True
 
 
 
@@ -178,57 +206,38 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(content_length)
         headers = self.headers
 	scopes='none'
-        print inspect.getframeinfo(inspect.currentframe()).lineno
 	credentials=None
-        print inspect.getframeinfo(inspect.currentframe()).lineno
-	print body
         try:
-            print inspect.getframeinfo(inspect.currentframe()).lineno
-            headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
+            #headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
+            #headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
+            headers, body, status = self.authserver.create_token_response(self.path, self.command, body, self.headers, credentials)
             self.send_response(status)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             for key, value in headers.iteritems():
-                print inspect.getframeinfo(inspect.currentframe()).lineno
                 self.send_header(key, value)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             self.end_headers()
         except OAuth2Error as error:
-            print("OAuth2 Error: " + error.error)
             if error.message:
                 print "Message: " + error.message
             if error.description:
                 print "Description: " + error.description
-            for line in format_stack():
-                print "Stacktrace: " + line
-            print inspect.getframeinfo(inspect.currentframe()).lineno
-        print "done oauthing"
+        self.wfile.write("<h1>Authenticated with POST MOTHAFUCKA!</h1>")
         
     def do_GET(self):  # pylint: disable=invalid-name
         """
         handle a HTTP GET request
         """
         authenticationheader = self.headers.getheader('Authorization')
-        if authenticationheader != '':
-            if http_authenticate(authenticationheader):
-                print "Authentication successful."
         content_length = self.headers.getheader('Content-Length', 0)
         body = self.rfile.read(content_length)
         
         try:
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             scopes, credentials = self.authserver.validate_authorization_request(
                 self.path, self.command, body, self.headers.dict)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             # store credentials somewhere
             headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             self.send_response(status)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             for key, value in headers.iteritems():
-                print inspect.getframeinfo(inspect.currentframe()).lineno
                 self.send_header(key, value)
-            print inspect.getframeinfo(inspect.currentframe()).lineno
             self.end_headers()
         except OAuth2Error as error:
             print("OAuth2 Error: " + error.error)
@@ -236,8 +245,6 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
                 print "Message: " + error.message
             if error.description:
                 print "Description: " + error.description
-            for line in format_stack():
-                print "Stacktrace: " + line
         return
 
 def run():
