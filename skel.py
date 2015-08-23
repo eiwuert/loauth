@@ -5,6 +5,8 @@ from pprint import pprint
 import inspect
 from types import MethodType
 from urllib import unquote_plus
+from logging import StreamHandler
+from logging import DEBUG
 
 from BaseHTTPServer import BaseHTTPRequestHandler
 from BaseHTTPServer import HTTPServer
@@ -49,7 +51,7 @@ def mysql_execute(command):
             connection.close()
 
 
-class LocalboxRequestValidator(RequestValidator):
+class LocalBoxRequestValidator(RequestValidator):
     """
     Checks correctness of the various aspects of the oauthlib server
     """
@@ -126,9 +128,6 @@ class LocalboxRequestValidator(RequestValidator):
 
     def authenticate_client_id(self, client_id, request, *args, **kwargs):
         print "NEW: authenticate client id"
-    def confirm_redirect_uri(self,  client_id, code, redirect_uri, client,
-            request, *args, **kwargs):
-        print "NEW: confirm redirect uri"
     def get_original_scopes(self, refresh_token, request, *args, **kwargs):
         print "NEW: get original scopes"
     def invalidate_authorization_code(self, client_id, code, request, *args, **kwargs):
@@ -197,9 +196,10 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
     handles oauth requests
     """
 
-    authserver = WebApplicationServer(LocalboxRequestValidator())
+    authserver = WebApplicationServer(LocalBoxRequestValidator())
 
     def do_POST(self):  # pylint: disable=invalid-name
+        print "post"
         uri = self.path
         http_method = self.command
         content_length = int(self.headers.getheader('Content-Length', 0))
@@ -229,18 +229,24 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
         authenticationheader = self.headers.getheader('Authorization')
         content_length = self.headers.getheader('Content-Length', 0)
         body = self.rfile.read(content_length)
+        print "get"
         
         try:
+            print "1"
             scopes, credentials = self.authserver.validate_authorization_request(
-                self.path, self.command, body, self.headers.dict)
+                self.path, self.command, body, self.headers)
             # store credentials somewhere
+            print "2"
             headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
+            print "3"
             self.send_response(status)
+            print "4"
             for key, value in headers.iteritems():
                 self.send_header(key, value)
+            print "5"
             self.end_headers()
         except OAuth2Error as error:
-            print("OAuth2 Error: " + error.error)
+            print("OAuth2 Error: " + error.__class__.__name__ + ": " + error.error)
             if error.message:
                 print "Message: " + error.message
             if error.description:
@@ -253,12 +259,10 @@ def run():
     """
     server_address = ('127.0.0.1', 8000)
     httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
-    #authserver = WebApplicationServer(LocalboxRequestValidator())
-    #httpd.add_authserver = MethodType(add_authserver, httpd, HTTPServer)
-    #httpd.add_authserver(authserver)
-    print 'http server is running'
-    httpd.handle_request()
-    #httpd.serve_forever()
+    httpd.serve_forever()
+    #httpd.handle_request()
 
 if __name__ == '__main__':
+    logger = StreamHandler()
+    logger.setLevel(DEBUG)
     run()
