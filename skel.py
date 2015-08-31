@@ -2,9 +2,6 @@
 oauth implementation testing skeleton
 """
 from pprint import pprint
-import inspect
-from types import MethodType
-from urllib import unquote_plus
 from logging import StreamHandler
 from logging import DEBUG
 
@@ -14,42 +11,55 @@ from MySQLdb import connect
 from MySQLdb import Error
 from base64 import b64decode
 from oauthlib.oauth2 import RequestValidator
-from oauthlib.oauth2 import WebApplicationServer
+from oauthlib.oauth2 import Server
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
-from oauthlib.oauth2.rfc6749.errors import InvalidClientIdError
-from oauthlib.oauth2.rfc6749.errors import InvalidRequestError
-from oauthlib.oauth2.rfc6749.errors import MissingClientIdError
-from oauthlib.oauth2.rfc6749.errors import UnsupportedResponseTypeError
-from oauthlib.oauth2.rfc6749.errors import UnauthorizedClientError
-from traceback import format_stack
 
+from datetime import datetime
+from datetime import timedelta
 
 import logging
 import sys
+
 log = logging.getLogger('oauthlib')
 log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
-
+log = logging.getLogger('oauth')
+log.addHandler(logging.StreamHandler(sys.stdout))
+log.setLevel(logging.DEBUG)
 
 class ClientStub:
     def __init__(self, client_id):
         self.client_id = client_id
+    def __str__(self):
+        return "Client: "+self.client_id
 
-def mysql_execute(command):
+def mysql_execute(command, params = None):
     """
     Function to execute a sql statement on the mysql database
     """
+    logging.getLogger("oauth").debug("mysql_execute(" + command + ", " + str(params) + ")")
     try:
         connection = connect('localhost', 'user', 'pass', 'test')
         cursor = connection.cursor()
-        cursor.execute(command)
+        cursor.execute(command, params)
+        connection.commit()
         return cursor.fetchall()
     except Error as mysqlerror:
         print "MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1])
     finally:
-        if connection:
-            connection.close()
+        try:
+            if connection:
+                connection.close()
+        except UnboundLocalError:
+            pass
 
+def clear_bearer_tokens(client_id):
+    """
+    remove excess tokens
+    """
+    logging.getLogger("oauth").debug("clear_bearer_tokens(" + client_id+")")
+    sql = "delete from bearer_tokens where client_id = %s;"
+    mysql_execute(sql, (client_id, ))
 
 class LocalBoxRequestValidator(RequestValidator):
     """
@@ -61,38 +71,43 @@ class LocalBoxRequestValidator(RequestValidator):
         this source code document is publicly available, the amount of
         security gained from this is practially none.
         """
-        print "validate client id"
+        logging.getLogger("oauth").debug("validate_client_id(" + client_id + ")")
         result = mysql_execute("select * from clients where id = " + client_id)
+        if result == None:
+            return False
         return len(result) == 1
 
     def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
         """
         Redirect url for when none is given
         """
-        print "get default redirect uri"
-        return '/authenticated'
+        logging.getLogger("oauth").debug("get_default_redirect_uri(" + client_id + ")")
+        return 'http://localhost:8000/authenticated'
 
     def validate_redirect_uri(self, client_id, redirect_uri, request, *args, **kwargs):
         """
         TODO: check validity if redirect uri
         """
-        print "validate redirect uri"
+        logging.getLogger("oauth").debug("validate_redirect_uri(" + client_id + ", " + redirect_uri + ")")
         return True
 
     def save_authorization_code(self, client_id, code, request, *args, **kwargs):
         """
         TODO: save authcode
         """
-        print "NEW: save authorization code"
-        pprint(code)
-
+        logging.getLogger("oauth").debug("save_authorization_code()")
+	sql = "insert into authentication_code (client_id, authcode) values (%s, %s);"
+        params = ( client_id, code['code'] )
+        mysql_execute(sql, params)
 
     def validate_response_type(self, client_id, response_type, client, request,
                                *args, **kwargs):
         """
         checks the validity of the response_type value.
         """
-        print "validate response type"
+        logging.getLogger("oauth").debug("validate_response_type()")
+        #TODO: filter certain response types because we cannot build certain things
+        return True
         types = response_type.split(" ")
         return_value = True
         for rtype in types:
@@ -105,7 +120,7 @@ class LocalBoxRequestValidator(RequestValidator):
         """
         returns security scopes.
         """
-        print "get default scopes"
+        logging.getLogger("oauth").debug("get_default_scopes(" + client_id + ")")
         return 'all'
 
     def validate_scopes(self, client_id, scopes, client, request, *args,
@@ -113,62 +128,120 @@ class LocalBoxRequestValidator(RequestValidator):
         """
         validates validity of the given scope.
         """
-        print "validate scopes"
+        logging.getLogger("oauth").debug("validate_scopes()")
         return True
 
+    def validate_user(self, username, password, client, request, *args, **kwargs):
+        logging.getLogger("oauth").debug("validate_user(" + username + ", " + password + ", " + str(client) + ")")
+        return user_pass_authenticate(username, password)
+
     def authenticate_client(self, request, *args, **kwargs):
-        print "NEW: authenticate client WOOTISDOEWATIWANTZ"
-        authorization_header_contents = request.headers['authorization']
-        if http_authenticate(authorization_header_contents):
-            if not request.client:
-                request.client = ClientStub(u'10')
-            return True
+        logging.getLogger("oauth").debug("authenticate_client()")
+        authorization_header_contents = request.headers.get('authorization', '')
+        print authorization_header_contents
+        if authorization_header_contents is not '':
+            # basic http authentication unpacking
+            client_id = b64decode(authorization_header_contents.split(" ")[1]).split(":")[0]
+
+            if (authorization_header_contents[:5] == 'Basic'):
+                result = basic_http_authenticate(authorization_header_contents, True)
+                request.client = ClientStub(client_id)
+                #validation related
+                request.client_id = client_id
+                return result
         else:
-            return False
+            username = request.headers.get('client_id', '')
+            password = request.headers.get('client_secret', '')
+            result = user_pass_authenticate(username, password, True)
+            if result:
+                request.client_id = username
+                request.client = ClientStub(username)
+            return result
 
     def authenticate_client_id(self, client_id, request, *args, **kwargs):
-        print "NEW: authenticate client id"
+        logging.getLogger("oauth").debug("authenticate_client_id()")
+        raise NotImplementedError('needs checking')
+
     def get_original_scopes(self, refresh_token, request, *args, **kwargs):
-        print "NEW: get original scopes"
+        logging.getLogger("oauth").debug("get_original_scopes()")
+        raise NotImplementedError('needs checking')
+        return 'all'
+
     def invalidate_authorization_code(self, client_id, code, request, *args, **kwargs):
-        print "NEW: invalidate authorization code"
+        logging.getLogger("oauth").debug("invalidate_authorization_code()")
+        sql = "delete from authentication_code where client_id = %s and authcode = %s;"
+        mysql_execute(sql, (client_id, code))
+        return
+
     def save_bearer_token(self, token, request, *args, **kwargs):
-        print "NEW: save bearer token"
+        logging.getLogger("oauth").debug("save_bearer_token()")
+        pprint(token)
+        clear_bearer_tokens(request.client.client_id)
+
+        sql = "insert into bearer_tokens (access_token, refresh_token, expires, scopes, client_id) values (%s, %s, %s, %s, %s)"
+        enddate =  datetime.now() + timedelta(0,token['expires_in'],0,0,0,0)
+        params = (token.get('access_token'), token.get('refresh_token'), enddate, token.get('scope'), request.client.client_id)
+        mysql_execute(sql, params)
+
     def validate_bearer_token(self, token, scopes, request):
-        print "NEW: validate bearer token"
+        logging.getLogger("oauth").debug("validate_bearer_token()")
+        sql = "select * from bearer_tokens where access_token = %s and client_id = %s and expires > NOW()";
+        params = refresh_token, client.client_id
+        result = mysql_execute(sql, params)
+        if result == None:
+            return False
+        return len(result) == 1
+
     def validate_code(self, client_id, code, client, request, *args, **kwargs):
-        print "NEW: validate code"
+        logging.getLogger("oauth").debug("validate_code()")
         #OBS! The request.user attribute should be set to the resource owner
         #associated with this authorization code. Similarly request.scopes and
         #request.state must also be set.
-        request.scopes=""
-	request.state=""
-        return True
+        #request.scopes="code where client_id = %s and authcode = %s and expires > NOW();"
+        result = mysql_execute(sql, (client_id, code))
+        if result == None:
+            return False
+        return len(result)==1
+
     def validate_grant_type(self, client_id, grant_type, client, request, *args, **kwargs):
-        print "NEW: validate grant type"
+        logging.getLogger("oauth").debug("validate_grant_type()")
         return True
+
     def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
-        print "NEW: validate refresh token"
-    def validate_user(self, username, password, client, request, *args, **kwargs):
-        print "NEW: validate user"
+        logging.getLogger("oauth").debug("validate_refresh_token(" + refresh_token + ", " + client + ")")
+        sql = "select * from bearer_tokens where refresh_token = %s and client_id = %s and expires > NOW()";
+        params = refresh_token, client.client_id
+        result = mysql_execute(sql, params)
+        if result == None:
+            return False
+        return len(result) == 1
+
 
     def confirm_redirect_uri(self, client_id, code, redirect_uri, client,
             *args, **kwargs):
-        print "NEW: confirm redirect uri (altered to actually be callable)"
+        logging.getLogger("oauth").debug("confirm_redirect_uri()")
+        raise NotImplementedError('needs checking')
         return True
 
+def user_pass_authenticate(username, password, authenticate_client = False):
+    logging.getLogger("oauth").debug("user_pass_authenticate(" + username + ", " + password + ", " + str(authenticate_client) + ")")
+    if authenticate_client:
+        result = mysql_execute("select 1 from clients where id= %s and secret = %s;",
+                           (username, password))
+    else:
+        result = mysql_execute("select 1 from users where user = %s and pass = %s;",
+                           (username, password))
+    if result == None:
+        return False
+    return len(result) == 1
 
-
-
-#authenticate_client authenticate_client_id confirm_redirect_uri get_original_scopes invalidate_authorization_code save_bearer_token validate_bearer_token validate_code validate_grant_type validate_refresh_token validate_user
-
-
-def http_authenticate(authorization_header_contents):
+def basic_http_authenticate(authorization_header_contents, authenticate_client=False):
     """
     Does (basic) HTTP authentication
     example line: Basic bmlkbzpwYXNzOm9yZA==
     NOTE: This implementation cannot handle usernames with colons.
     """
+    logging.getLogger("oauth").debug("basic_http_authenticate(" + authorization_header_contents+ ", " + str(authenticate_client) + ")")
     if authorization_header_contents is None:
         return False
     try:
@@ -176,74 +249,55 @@ def http_authenticate(authorization_header_contents):
         assert authtype == "Basic"
     except(ValueError, AssertionError) as error:
         print "Cannot authenticate: " + error.message
-        print authorization_header_contents
-        print authtype
         return False
     data = b64decode(authdata)
     username, password = data.split(":", 1)
     # TODO: this is a bad implementation due sql injection
-    result = mysql_execute("select * from users where name = '" + username +
-                           "' and pass = '" + password + "';")
-    return len(result) == 1
-
-def add_authserver(self, authserver):
-    self.authserver = authserver
-    return
-
+    return user_pass_authenticate(username, password, authenticate_client=authenticate_client)
 
 class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
     """
     handles oauth requests
     """
 
-    authserver = WebApplicationServer(LocalBoxRequestValidator())
+    authserver = Server(LocalBoxRequestValidator(), 600)
 
     def do_POST(self):  # pylint: disable=invalid-name
-        print "post"
-        uri = self.path
-        http_method = self.command
+        logging.getLogger("oauth").debug("do_POST()")
         content_length = int(self.headers.getheader('Content-Length', 0))
         body = self.rfile.read(content_length)
-        headers = self.headers
-	scopes='none'
 	credentials=None
         try:
-            #headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
-            #headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
             headers, body, status = self.authserver.create_token_response(self.path, self.command, body, self.headers, credentials)
             self.send_response(status)
             for key, value in headers.iteritems():
                 self.send_header(key, value)
             self.end_headers()
+            self.wfile.write(body)
         except OAuth2Error as error:
             if error.message:
                 print "Message: " + error.message
             if error.description:
                 print "Description: " + error.description
-        self.wfile.write("<h1>Authenticated with POST MOTHAFUCKA!</h1>")
         
     def do_GET(self):  # pylint: disable=invalid-name
         """
         handle a HTTP GET request
         """
-        authenticationheader = self.headers.getheader('Authorization')
+        logging.getLogger("oauth").debug("do_GET()")
         content_length = self.headers.getheader('Content-Length', 0)
         body = self.rfile.read(content_length)
-        print "get"
         
+        if self.path == "/verify":
+            validity, request = self.authserver.verify_request(self.path, self.command, body, self.headers, None)
         try:
-            print "1"
             scopes, credentials = self.authserver.validate_authorization_request(
                 self.path, self.command, body, self.headers)
             # store credentials somewhere
-            print "2"
             headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
-            print "3"
             self.send_response(status)
-            print "4"
             for key, value in headers.iteritems():
                 self.send_header(key, value)
-            print "5"
             self.end_headers()
         except OAuth2Error as error:
             print("OAuth2 Error: " + error.__class__.__name__ + ": " + error.error)
@@ -257,12 +311,11 @@ def run():
     """
     start the test server.
     """
+    logging.getLogger("oauth").debug("start program")
     server_address = ('127.0.0.1', 8000)
     httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
     httpd.serve_forever()
     #httpd.handle_request()
 
 if __name__ == '__main__':
-    logger = StreamHandler()
-    logger.setLevel(DEBUG)
     run()
