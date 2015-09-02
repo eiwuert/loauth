@@ -360,22 +360,3 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
                 if error.description:
                     print "Description: " + error.description
         return
-
-def run():
-    """
-    start the test server.
-    """
-    log = getLogger('oauthlib')
-    log.addHandler(StreamHandler(stdout))
-    log.setLevel(DEBUG)
-    log = getLogger('oauth')
-    log.addHandler(StreamHandler(stdout))
-    log.setLevel(DEBUG)
-    getLogger("oauth").debug("start program")
-    server_address = ('127.0.0.1', 8000)
-    httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
-    httpd.serve_forever()
-    #httpd.handle_request()
-
-if __name__ == '__main__':
-    run()
