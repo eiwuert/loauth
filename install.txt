@@ -1,0 +1,8 @@
+	loauth - Libbit's standalone OAuth2 authorization server
+-----------------------------------------------------------------------
+
+* install .egg file
+* install database definitions
+* create users in the database
+
+
