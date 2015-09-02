@@ -1,7 +1,7 @@
 from unittest import TestCase, main
 
-from oauth2 import LocalBoxRequestValidator
-from oauth2 import ClientStub
+from loauth import LocalBoxRequestValidator
+from loauth import ClientStub
 from oauthlib.common import Request
 
 

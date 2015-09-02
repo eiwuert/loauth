@@ -2,24 +2,25 @@
 oauth implementation testing skeleton
 """
 from json import dumps
-from pprint import pprint
 from logging import getLogger
 from logging import DEBUG
 from logging import StreamHandler
+from sys import exit
 
 from ConfigParser import SafeConfigParser
+from ConfigParser import NoSectionError
 from BaseHTTPServer import BaseHTTPRequestHandler
 from BaseHTTPServer import HTTPServer
+from base64 import b64decode
+from datetime import datetime, timedelta
+
 from MySQLdb import connect
 from MySQLdb import Error
-from base64 import b64decode
 from oauthlib.oauth2 import RequestValidator
 from oauthlib.oauth2 import Server
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from oauthlib.common import generate_client_id
 
-from datetime import datetime, timedelta
-from sys import stdout
 
 
 class ClientStub:
@@ -35,7 +36,7 @@ def mysql_execute(command, params = None):
     getLogger("oauth").debug("mysql_execute(" + command + ", " + str(params) + ")")
     try:
         parser = SafeConfigParser()
-        parser.read('config.ini')
+        parser.read(['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini'])
         host = parser.get('database', 'hostname')
         user = parser.get('database', 'username')
         pawd = parser.get('database', 'password')
@@ -48,6 +49,9 @@ def mysql_execute(command, params = None):
         return cursor.fetchall()
     except Error as mysqlerror:
         print "MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1])
+    except NoSectionError:
+        print "Please configure the database"
+        exit(0)
     finally:
         try:
             if connection:
@@ -186,7 +190,6 @@ class LocalBoxRequestValidator(RequestValidator):
 
     def save_bearer_token(self, token, request, *args, **kwargs):
         getLogger("oauth").debug("save_bearer_token()")
-        pprint(token)
         clear_bearer_tokens(request.client.client_id)
 
         sql = "insert into bearer_tokens (access_token, refresh_token, expires, scopes, client_id) values (%s, %s, %s, %s, %s)"
