@@ -8,6 +8,7 @@ from logging import DEBUG
 from logging import StreamHandler
 from sys import exit
 from os.path import exists
+from sys import argv
 
 from ConfigParser import SafeConfigParser
 from ConfigParser import NoSectionError
@@ -38,8 +39,11 @@ def database_execute(command, params = None):
     Function to execute a sql statement on the database
     """
     getLogger("loauth").debug("database_execute(" + command + ", " + str(params) + ")")
+    inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
+    if len(argv) > 1:
+        inifiles = argv[1]
     parser = SafeConfigParser()
-    parser.read(['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini'])
+    parser.read(inifiles)
     dbtype = parser.get('database', 'type')
     if dbtype == "mysql":
         command = command.replace('?', '%s')
@@ -56,13 +60,14 @@ def sqlite_execute(command, params = None):
     #NOTE mostly copypasta'd from mysql_execute, may be a better way
     getLogger("loauth").debug("sqlite_execute(" + command + ", " + str(params) + ")")
     try:
+        inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
+        if len(argv) > 1:
+            inifiles = argv[1]
         parser = SafeConfigParser()
-        parser.read(['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini'])
+        parser.read(inifiles)
         filename = parser.get('database', 'filename')
         if not exists(filename):
-            print "DOES NOT EXIST"
             for sql in ["create table users (user char(255), pass char(255));", "create table clients (id char(255), secret char(255));", "create table authentication_code(client_id char(31), authcode char(31));", "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255));"]:
-                print sql
                 connection = sqlite_connect(filename)
                 cursor = connection.cursor()
                 cursor.execute(sql)
@@ -90,8 +95,11 @@ def mysql_execute(command, params = None):
     """
     getLogger("loauth").debug("mysql_execute(" + command + ", " + str(params) + ")")
     try:
+        inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
+        if len(argv) > 1:
+            inifiles = argv[1]
         parser = SafeConfigParser()
-        parser.read(['/etc/loauth.ini', '/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini'])
+        parser.read(inifiles)
         host = parser.get('database', 'hostname')
         user = parser.get('database', 'username')
         pawd = parser.get('database', 'password')

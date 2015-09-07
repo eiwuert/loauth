@@ -1,11 +1,13 @@
 """
 oauth implementation testing skeleton
 """
+from argparse import ArgumentParser
 from json import dumps
 from pprint import pprint
 from logging import getLogger
 from logging import DEBUG
 from logging import StreamHandler
+from sys import argv
 
 from ConfigParser import SafeConfigParser
 from BaseHTTPServer import BaseHTTPRequestHandler
@@ -23,7 +25,6 @@ from datetime import datetime, timedelta
 from sys import stdout
 
 from __init__ import OAuth2HTTPRequestHandler
-
 
 def run():
     """
