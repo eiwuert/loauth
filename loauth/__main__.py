@@ -32,9 +32,11 @@ def run():
     log = getLogger('oauthlib')
     log.addHandler(StreamHandler(stdout))
     log.setLevel(DEBUG)
-    log = getLogger('oauth')
+
+    log = getLogger('loauth')
     log.addHandler(StreamHandler(stdout))
     log.setLevel(DEBUG)
+
     getLogger("oauth").debug("start program")
     server_address = ('127.0.0.1', 8000)
     httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
