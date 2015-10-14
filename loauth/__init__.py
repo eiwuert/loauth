@@ -9,6 +9,7 @@ from logging import StreamHandler
 from sys import exit
 from os.path import exists
 from sys import argv
+from urlparse import urlparse as parse
 
 from ConfigParser import SafeConfigParser
 from ConfigParser import NoSectionError
@@ -25,7 +26,9 @@ from oauthlib.oauth2 import Server
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from oauthlib.common import generate_client_id
 
-
+def adduser(username, password):
+    sql = "insert into users (user, pass) values (?, ?);"
+    database_execute(sql, (username, password))
 
 class ClientStub:
     def __init__(self, client_id):
@@ -40,8 +43,8 @@ def database_execute(command, params = None):
     """
     getLogger("loauth").debug("database_execute(" + command + ", " + str(params) + ")")
     inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
-    if len(argv) > 1:
-        inifiles = argv[1]
+    #if len(argv) > 1:
+    #    inifiles = argv[1]
     parser = SafeConfigParser()
     parser.read(inifiles)
     dbtype = parser.get('database', 'type')
@@ -67,7 +70,7 @@ def sqlite_execute(command, params = None):
         parser.read(inifiles)
         filename = parser.get('database', 'filename')
         if not exists(filename):
-            for sql in ["create table users (user char(255), pass char(255));", "create table clients (id char(255), secret char(255));", "create table authentication_code(client_id char(31), authcode char(31));", "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255));"]:
+            for sql in ["create table users (user char(255), pass char(255));", "create table clients (id char(255), secret char(255), user char(255));", "create table authentication_code(client_id char(31), authcode char(31));", "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255));", "insert into users (user, pass) values ('testuser', 'testpass');"]:
                 connection = sqlite_connect(filename)
                 cursor = connection.cursor()
                 cursor.execute(sql)
@@ -262,7 +265,7 @@ class LocalBoxRequestValidator(RequestValidator):
 
     def validate_bearer_token(self, token, scopes, request):
         getLogger("loauth").debug("validate_bearer_token()")
-        sql = "select 1 from bearer_tokens where access_token = ? and client_id = ? and expires > NOW()";
+        sql = "select 1 from bearer_tokens where access_token = ? and client_id = ? and expires > datetime('now')";
         try:
             client_id = self.client.client_id
         except Error:
@@ -279,7 +282,7 @@ class LocalBoxRequestValidator(RequestValidator):
         #associated with this authorization code. Similarly request.scopes and
         #request.state must also be set.
         #request.scopes="
-        sql = "selectc 1 from code where client_id = ? and authcode = ? and expires > NOW();"
+        sql = "selectc 1 from code where client_id = ? and authcode = ? and expires > datetime('now');"
         result = database_execute(sql, (client_id, code))
         if result is None:
             return False
@@ -296,7 +299,7 @@ class LocalBoxRequestValidator(RequestValidator):
 
     def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
         getLogger("loauth").debug("validate_refresh_token(" + refresh_token + ", " + client + ")")
-        sql = "select 1 from bearer_tokens where refresh_token = ? and client_id = ? and expires > NOW()";
+        sql = "select 1 from bearer_tokens where refresh_token = ? and client_id = ? and expires > datetime('now')";
         params = refresh_token, client.client_id
         result = database_execute(sql, params)
         if result is None:
@@ -374,7 +377,8 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
         content_length = self.headers.getheader('Content-Length', 0)
         body = self.rfile.read(content_length)
         
-        if self.path == "/register":
+        parsed_path = parse(self.path).path
+        if parsed_path == "/register":
             print "registring"
             client_id = generate_client_id()
             client_secret = generate_client_id()
@@ -384,16 +388,21 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
             database_execute(sql, (client_id, client_secret))
             self.wfile.write(json)
             return
-        if self.path == "/verify":
+        if parsed_path == "/verify":
             print "VERIFY PATH"
             auth_header_contents = self.headers.getheader('Authorization','')
             if auth_header_contents != '':
-                ttype, token = auth_header_contents.split(' ')
+                try:
+                    ttype, token = auth_header_contents.split(' ')
+                except ValueError:
+                    print("Problem parsing authorization header: " + auth_header_contents)
+                    self.send_response(403)
+                    return
                 if ttype != 'Bearer':
                     result = "No Bearer Authorization Token found."
                     self.send_response(403)
                 else:
-                    sql = "select clients.user from bearer_tokens, clients where bearer_tokens.access_token = ? and bearer_tokens.expires > NOW() and bearer_tokens.client_id = clients.id;"
+                    sql = "select clients.user from bearer_tokens, clients where bearer_tokens.access_token = ? and bearer_tokens.expires > datetime('now') and bearer_tokens.client_id = clients.id;"
                     result = database_execute(sql, (token,))
                     if not result:
                         result = "No authenticated bearer authorization token found"
@@ -402,7 +411,7 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
                         result = result[0][0]
                         self.send_response(200)
             else:
-                result = False
+                result = None
                 self.send_response(403)
             self.end_headers()
             print 'end'
