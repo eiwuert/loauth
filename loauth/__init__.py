@@ -1,128 +1,52 @@
 """
 oauth implementation testing skeleton
 """
-from pprint import pprint
 from json import dumps
 from logging import getLogger
-from logging import DEBUG
-from logging import StreamHandler
-from sys import exit
-from os.path import exists
-from sys import argv
 from urlparse import urlparse as parse
+from hashlib import sha512
+from os import urandom
 
-from ConfigParser import SafeConfigParser
-from ConfigParser import NoSectionError
 from BaseHTTPServer import BaseHTTPRequestHandler
-from BaseHTTPServer import HTTPServer
 from base64 import b64decode
+from base64 import b16encode
 from datetime import datetime, timedelta
 
-from MySQLdb import connect as mysql_connect
-from sqlite3 import connect as sqlite_connect
 from MySQLdb import Error
 from oauthlib.oauth2 import RequestValidator
 from oauthlib.oauth2 import Server
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from oauthlib.common import generate_client_id
 
-def adduser(username, password):
-    sql = "insert into users (user, pass) values (?, ?);"
-    database_execute(sql, (username, password))
+from database import database_execute
+
+def gethash(password, salt):
+    passhash = sha512(str(salt) + password).hexdigest()
+    return passhash
+
+def addclient(client_id, client_secret, salt=None):
+    sql = "insert into clients (id, secret, salt) values (?, ?, ?);"
+    if salt is None:
+        salt = b16encode(urandom(8))
+    passhash = gethash(client_secret, salt)
+    database_execute(sql, (client_id, passhash, salt))
+
+def adduser(username, password, salt=None):
+    sql = "insert into users (user, pass, salt) values (?, ?, ?);"
+    if salt is None:
+        salt = b16encode(urandom(8))
+    passhash = gethash(password, salt)
+    database_execute(sql, (username, passhash, salt))
+
+def deluser(username):
+    sql = "delete from users where user = ?;"
+    database_execute(sql, (username,))
 
 class ClientStub:
     def __init__(self, client_id):
         self.client_id = client_id
     def __str__(self):
         return "Client: "+self.client_id
-
-
-def database_execute(command, params = None):
-    """
-    Function to execute a sql statement on the database
-    """
-    getLogger("loauth").debug("database_execute(" + command + ", " + str(params) + ")")
-    inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
-    #if len(argv) > 1:
-    #    inifiles = argv[1]
-    parser = SafeConfigParser()
-    parser.read(inifiles)
-    dbtype = parser.get('database', 'type')
-    if dbtype == "mysql":
-        command = command.replace('?', '%s')
-        return mysql_execute(command, params)
-    elif (dbtype == "sqlite3") or (dbtype == "sqlite"):
-        return sqlite_execute(command, params)
-    else:
-        print "Unknown database type, cannot continue"
-
-def sqlite_execute(command, params = None):
-    """
-    Function to execute a sql statement on the mysql database
-    """
-    #NOTE mostly copypasta'd from mysql_execute, may be a better way
-    getLogger("loauth").debug("sqlite_execute(" + command + ", " + str(params) + ")")
-    try:
-        inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
-        if len(argv) > 1:
-            inifiles = argv[1]
-        parser = SafeConfigParser()
-        parser.read(inifiles)
-        filename = parser.get('database', 'filename')
-        if not exists(filename):
-            for sql in ["create table users (user char(255), pass char(255));", "create table clients (id char(255), secret char(255), user char(255));", "create table authentication_code(client_id char(31), authcode char(31));", "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255));", "insert into users (user, pass) values ('testuser', 'testpass');"]:
-                connection = sqlite_connect(filename)
-                cursor = connection.cursor()
-                cursor.execute(sql)
-                connection.commit()
-        connection = sqlite_connect(filename)
-        cursor = connection.cursor()
-        cursor.execute(command, params)
-        connection.commit()
-        return cursor.fetchall()
-    except Error as mysqlerror:
-        print "MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1])
-    except NoSectionError:
-        print "Please configure the database"
-    finally:
-        try:
-            if connection:
-                connection.close()
-        except UnboundLocalError:
-            pass
-        
-
-def mysql_execute(command, params = None):
-    """
-    Function to execute a sql statement on the mysql database
-    """
-    getLogger("loauth").debug("mysql_execute(" + command + ", " + str(params) + ")")
-    try:
-        inifiles = ['/etc/loauth/config.ini', '~/.config/loauth/config.ini', './loauth.ini']
-        if len(argv) > 1:
-            inifiles = argv[1]
-        parser = SafeConfigParser()
-        parser.read(inifiles)
-        host = parser.get('database', 'hostname')
-        user = parser.get('database', 'username')
-        pawd = parser.get('database', 'password')
-        dbse = parser.get('database', 'database')
-        port = parser.getint('database', 'port')
-        connection = mysql_connect(host=host, port=port, user=user, passwd=pawd, db=dbse)
-        cursor = connection.cursor()
-        cursor.execute(command, params)
-        connection.commit()
-        return cursor.fetchall()
-    except Error as mysqlerror:
-        print "MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1])
-    except NoSectionError:
-        print "Please configure the database"
-    finally:
-        try:
-            if connection:
-                connection.close()
-        except UnboundLocalError:
-            pass
 
 def clear_bearer_tokens(client_id):
     """
@@ -132,10 +56,15 @@ def clear_bearer_tokens(client_id):
     sql = "delete from bearer_tokens where client_id = ?;"
     database_execute(sql, (client_id, ))
 
-class LocalBoxRequestValidator(RequestValidator):
+class LoauthRequestValidator(RequestValidator):
     """
     Checks correctness of the various aspects of the oauthlib server
     """
+    def __init__(self, *args, **kwargs):
+        self.username = None
+        self.name = None 
+        RequestValidator.__init__(self, *args, **kwargs)
+
     def validate_client_id(self, client_id, request, *args, **kwargs):
         """
         validates the client_id. Since this is either 'ios' or 'android', and
@@ -167,8 +96,8 @@ class LocalBoxRequestValidator(RequestValidator):
         TODO: save authcode
         """
         getLogger("loauth").debug("save_authorization_code()")
-	sql = "insert into authentication_code (client_id, authcode) values (?, ?);"
-        params = ( client_id, code['code'] )
+        sql = "insert into authentication_code (client_id, authcode) values (?, ?);"
+        params = (client_id, code['code'])
         database_execute(sql, params)
 
     def validate_response_type(self, client_id, response_type, client, request,
@@ -218,6 +147,31 @@ class LocalBoxRequestValidator(RequestValidator):
 
     def authenticate_client(self, request, *args, **kwargs):
         getLogger("loauth").debug("authenticate_client()")
+        from pprint import pprint
+        bodydict = dict(request.decoded_body)
+        pprint(request.__dict__)
+        if ((request.headers.get('username', '') != '' and
+           request.headers.get('password', '') != '' and
+           request.headers.get('grant_type', '') == 'password') or
+           (bodydict.get('username') != None and
+           bodydict.get('password') != None and
+           bodydict.get('grant_type') == 'password')):
+
+            print "This is a localbox special situation. Adding Client based on user/pass"
+            client_id = request.headers.get('client_id', bodydict.get('client_id'))
+            sql = "select 1 from clients where id = ?;"
+            result = database_execute(sql, (client_id,))
+            from pprint import pprint
+            pprint(result)
+            if result == []:
+                print "client not found"
+                request.client_id = client_id
+                request.client = ClientStub(client_id)
+                client_secret = request.headers.get('client_secret', bodydict.get('client_secret'))
+                addclient(client_id, client_secret)
+                return True
+            return False
+
         authorization_header_contents = request.headers.get('authorization', '')
         if authorization_header_contents != '':
             # basic http authentication unpacking
@@ -236,7 +190,6 @@ class LocalBoxRequestValidator(RequestValidator):
             if result:
                 request.client_id = username
                 request.client = ClientStub(username)
-            print str(result)
             return result
 
     def authenticate_client_id(self, client_id, request, *args, **kwargs):
@@ -259,7 +212,7 @@ class LocalBoxRequestValidator(RequestValidator):
         clear_bearer_tokens(request.client.client_id)
 
         sql = "insert into bearer_tokens (access_token, refresh_token, expires, scopes, client_id) values (?, ?, ?, ?, ?)"
-        enddate =  datetime.now() + timedelta(0,token['expires_in'],0,0,0,0)
+        enddate =  datetime.now() + timedelta(0, token['expires_in'], 0, 0, 0, 0)
         params = (token.get('access_token'), token.get('refresh_token'), enddate, token.get('scope'), request.client.client_id)
         database_execute(sql, params)
 
@@ -314,16 +267,19 @@ class LocalBoxRequestValidator(RequestValidator):
         return True
 
 def user_pass_authenticate(username, password, authenticate_client = False):
+    # TODO: salt thingie bla
     getLogger("loauth").debug("user_pass_authenticate(" + username + ", " + password + ", " + str(authenticate_client) + ")")
     if authenticate_client:
-        result = database_execute("select 1 from clients where id= ? and secret = ?;",
-                           (username, password))
+        result = database_execute("select secret, salt from clients where id = ?;", (username,))
     else:
-        result = database_execute("select 1 from users where user = ? and pass = ?;",
-                           (username, password))
-    if result is None:
+        result = database_execute("select pass, salt from users where user = ?;", (username,))
+    if result == []:
         return False
-    return len(result) == 1
+    else:
+        passhash = str(result[0][0])
+        salt = result[0][1]
+        calchash = gethash(password, salt)
+        return passhash == calchash
 
 def basic_http_authenticate(authorization_header_contents, authenticate_client=False):
     """
@@ -349,7 +305,7 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
     handles oauth requests
     """
 
-    authserver = Server(LocalBoxRequestValidator(), 600)
+    authserver = Server(LoauthRequestValidator(), 600)
 
     def do_POST(self):  # pylint: disable=invalid-name
         getLogger("loauth").debug("do_POST()")
@@ -365,8 +321,10 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         except OAuth2Error as error:
             if error.message:
+                self.wfile.write(error.message)
                 print "Message: " + error.message
             if error.description:
+                self.wfile.write(error.description)
                 print "Description: " + error.description
         
     def do_GET(self):  # pylint: disable=invalid-name
@@ -430,7 +388,9 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
             except OAuth2Error as error:
                 print("OAuth2 Error: " + error.__class__.__name__ + ": " + error.error)
                 if error.message:
+                    self.wfile.write(error.message)
                     print "Message: " + error.message
                 if error.description:
+                    self.wfile.write(error.description)
                     print "Description: " + error.description
         return
