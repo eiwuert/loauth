@@ -38,8 +38,14 @@ def adduser(username, password, salt=None):
     passhash = gethash(password, salt)
     database_execute(sql, (username, passhash, salt))
 
+def delclient(clientname):
+    sql = "delete from clients where id = ?;"
+    database_execute(sql, (clientname,))
+
 def deluser(username):
     sql = "delete from users where user = ?;"
+    database_execute(sql, (username,))
+    sql = "delete from clients where user = ?;"
     database_execute(sql, (username,))
 
 class ClientStub:

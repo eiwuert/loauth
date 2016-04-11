@@ -11,6 +11,7 @@ from sys import stdout
 from . import OAuth2HTTPRequestHandler
 from . import adduser
 from . import deluser
+from . import delclient
 from . import addclient
 
 def setup_logging():
@@ -40,6 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--add-user', dest='newuser', nargs=2, help="add a new user", metavar=("USERNAME","PASSWORD"))
     parser.add_argument('--add-client', dest='newclient', nargs=2, help="add a new client", metavar=("CLIENT_ID","CLIENT_SECRET"))
     parser.add_argument('--del-user', dest='deluser', nargs=1, help="remove a user", metavar=("USERNAME"))
+    parser.add_argument('--del-client', dest='delclient', nargs=1, help="remove a client", metavar=("CLIENT_ID"))
     result = parser.parse_args()
     if result.newuser !=  None:
         logger.info("cli adding user " + result.newuser[0])
@@ -48,6 +50,10 @@ if __name__ == '__main__':
     if result.newclient != None:
         logger.info("cli adding client" + result.newclient[0])
         addclient(result.newclient[0], result.newclient[1])
+        start_program = False
+    if result.delclient != None:
+        logger.info("cli removing user " + result.delclient[0])
+        delclient(result.delclient[0])
         start_program = False
     if result.deluser != None:
         logger.info("cli removing user " + result.deluser[0])
