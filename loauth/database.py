@@ -76,11 +76,10 @@ def sqlite_execute(command, params=None):
         connection = sqlite_connect(filename)
         connection.text_factory = Binary
         cursor = connection.cursor()
-        if init_db:
-            for sql in open('database.sql').read().split("\n"):
-                if sql != "" and sql is not None:
-                    cursor.execute(sql)
-                    connection.commit()
+        cursor.execute('PRAGMA foreign_keys = ON;')
+        connection.commit()
+        if cursor.fetchall() == None:
+            exit("cannot do foreign keys on this SQLite database, exiting")
         if params:
             cursor.execute(command, params)
         else:

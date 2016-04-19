@@ -7,12 +7,20 @@ from logging import DEBUG
 from logging import StreamHandler
 from BaseHTTPServer import HTTPServer
 from sys import stdout
+from sys import exit
+from getpass import getpass
 
 from . import OAuth2HTTPRequestHandler
 from . import adduser
+from . import listusers
+from . import listclients
 from . import deluser
 from . import delclient
 from . import addclient
+from . import moduser
+from . import modclient
+from . import create_database
+from . import user_pass_authenticate
 
 def setup_logging():
     log = getLogger('oauthlib')
@@ -20,6 +28,10 @@ def setup_logging():
     log.setLevel(DEBUG)
 
     log = getLogger('loauth')
+    log.addHandler(StreamHandler(stdout))
+    log.setLevel(DEBUG)
+
+    log = getLogger('database')
     log.addHandler(StreamHandler(stdout))
     log.setLevel(DEBUG)
 
@@ -35,30 +47,126 @@ def run():
 
 if __name__ == '__main__':
     setup_logging()
+    
     logger = getLogger('loauth')
     start_program = True
     parser = ArgumentParser(description="Libbit OAuth Server")
-    parser.add_argument('--add-user', dest='newuser', nargs=2, help="add a new user", metavar=("USERNAME","PASSWORD"))
-    parser.add_argument('--add-client', dest='newclient', nargs=2, help="add a new client", metavar=("CLIENT_ID","CLIENT_SECRET"))
+
+#, metavar=("USERNAME","PASSWORD"))
+    parser.add_argument('--add-user', dest='newuser', nargs=1, help="add a new user", metavar=("USERNAME"))
+    parser.add_argument('--mod-user', dest='moduser', nargs=1, help="change the password of a user", metavar=("USERNAME"))
     parser.add_argument('--del-user', dest='deluser', nargs=1, help="remove a user", metavar=("USERNAME"))
+    parser.add_argument('--list-users', dest='listuser', action='store_true', help="list available users")
+    parser.add_argument('--authenticateuser', dest="authenticateuser", nargs=1, help="try authentication as USERNAME", metavar=("USERNAME"))
+ 
+    parser.add_argument('--add-client', dest='newclient', nargs=3, help="add a new client", metavar=("CLIENT_ID","CLIENT_SECRET", "USERNAME"))
+    parser.add_argument('--mod-client', dest='modclient', nargs=1, help="change the secret of a client", metavar=("CLIENT_ID"))
     parser.add_argument('--del-client', dest='delclient', nargs=1, help="remove a client", metavar=("CLIENT_ID"))
+    parser.add_argument('--list-clients', dest='listclients', nargs='?', help="list available clients", metavar=("USERNAME"))
+    parser.add_argument('--authenticateclient', dest="authenticateclient", nargs=1, help="try authentication as CLIENT_ID", metavar=("CLIENT_ID"))
+
+    parser.add_argument('--init-db', dest='initdb', action='store_true', help="Initialise Database")
+    parser.add_argument('--password', dest='password', nargs=1, help="use PASSWORD for this user/client", metavar=("PASSWORD"))
     result = parser.parse_args()
-    if result.newuser !=  None:
+
+    if result.initdb:
+        logger.info("cli init database")
+        create_database()
+        start_program = False
+
+    if result.listuser:
+        for user in listusers():
+            print user
+        start_program = False
+
+    if result.listclients != None:
+        user = None
+        if len(result.listclients) > 0:
+            user = result.listclients[0]
+            result = listclients(user)
+        else:
+            result = listclients()
+        for user, clients in result.iteritems():
+            print "Client list for user " + user
+            for client in clients:
+                print " " + client
+        start_program = False
+
+    if 'newuser' in result and result.newuser !=  None:
         logger.info("cli adding user " + result.newuser[0])
-        adduser(result.newuser[0], result.newuser[1])
+        #TODO Ask password if not given
+        if result.password != None:
+            password = result.password[0]
+        else:
+            password = getpass(prompt="New password: ")
+        adduser(result.newuser[0], password)
         start_program = False
-    if result.newclient != None:
+
+    if 'modclient' in result and result.modclient != None:
+        logger.info('cli changing password for client ' + result.modclient[0])
+        if result.password != None:
+            password = result.password[0]
+        else:
+            password = getpass(prompt="Password: ")
+        modclient(result.modclient[0], password)
+        start_program = False
+
+    if 'moduser' in result and result.moduser != None:
+        logger.info('cli changing password for user ' + result.moduser[0])
+        if result.password != None:
+            password = result.password[0]
+        else:
+            password = getpass(prompt="Password: ")
+        moduser(result.moduser[0], password)
+        start_program = False
+        
+
+    if 'newclient' in result and result.newclient != None:
         logger.info("cli adding client" + result.newclient[0])
-        addclient(result.newclient[0], result.newclient[1])
+        addclient(result.newclient[0], result.newclient[1], result.newclient[2])
         start_program = False
-    if result.delclient != None:
+
+    if 'delclient' in result and result.delclient != None:
         logger.info("cli removing user " + result.delclient[0])
         delclient(result.delclient[0])
         start_program = False
-    if result.deluser != None:
+
+    if 'deluser' in result and result.deluser != None:
         logger.info("cli removing user " + result.deluser[0])
         deluser(result.deluser[0])
         start_program = False
+
+    if 'authenticateuser' in result and result.authenticateuser!= None:
+        username = result.authenticateuser[0]
+        logger.info("CLI authentication of " + result.authenticateuser[0])
+        if result.password != None:
+            password = result.password[0]
+        else:
+            password = getpass(prompt="Password: ")
+        result = user_pass_authenticate(username, password, False)
+        print result
+        if result:
+            print "Success"
+            exit(0)
+        else:
+            print "Failure"
+            exit(1)
+
+    if 'authenticateclient' in result and result.authenticateclient != None:
+        logger.info("CLI authentication of " + result.authenticateclient[0])
+        username = result.authenticateclient[0]
+        if result.password != None:
+            password = result.password[0]
+        else:
+            password = getpass(prompt="Secret: ")
+        result = user_pass_authenticate(username, password, True)
+        print result
+        if result:
+            print "Success"
+            exit(0)
+        else:
+            print "Failure"
+            exit(1)
+
     if start_program:
        run()
-    print "end f the line"

@@ -38,9 +38,9 @@ class ConfigSingleton(object):
         if not hasattr(self, 'configparser'):
             self.configparser = ConfigParser()
             if not location:
-                self.configparser.read(['/etc/localbox.ini', '~/localbox.ini',
-                                        '~/.config/localbox/config.ini',
-                                        'localbox.ini'])
+                self.configparser.read(['/etc/loauth.ini', '~/loauth.ini',
+                                        '~/.config/loauth/config.ini',
+                                        'loauth.ini'])
             else:
                 self.configparser.read(location)
 

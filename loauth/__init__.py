@@ -20,16 +20,49 @@ from oauthlib.common import generate_client_id
 
 from database import database_execute
 
+def create_database():
+    for sql in ["PRAGMA foreign_keys = ON;",
+                "create table users (user char(255) primary key, pass char(255), salt char(255));",
+                "create table clients (id char(255) primary key, secret char(255), salt char(255), user char(255), foreign key(user) references users(user) on update cascade on delete cascade);",
+                "create table authentication_code(client_id char(31), authcode char(31), foreign key(client_id) references clients(id) on update cascade on delete cascade);",
+                "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255), foreign key(client_id) references clients(id) on update cascade on delete cascade);"]:
+        database_execute(sql)
+
+
 def gethash(password, salt):
     passhash = sha512(str(salt) + password).hexdigest()
     return passhash
 
-def addclient(client_id, client_secret, salt=None):
-    sql = "insert into clients (id, secret, salt) values (?, ?, ?);"
+def addclient(client_id, client_secret, user, salt=None):
+    sql = "insert into clients (id, secret, salt, user) values (?, ?, ?, ?);"
     if salt is None:
         salt = b16encode(urandom(8))
     passhash = gethash(client_secret, salt)
-    database_execute(sql, (client_id, passhash, salt))
+    database_execute(sql, (client_id, passhash, salt, user))
+
+def listusers():
+    sql = "select user from users;"
+    result = [str(elem[0]) for elem in database_execute(sql)]
+    
+    return result
+
+def listclients(user=None):
+    sql = "select user, id from clients"
+    if user != None:
+        sql = sql + " where user = ?;"
+        result = database_execute(sql, (user))
+    else:
+        result = database_execute(sql)
+    users = {}
+    for (user, client) in result:
+        user = str(user)
+        client = str(client)
+        if user in users:
+             users[user].append(client)
+        else:
+            users[user] = [client]
+    return users
+        
 
 def adduser(username, password, salt=None):
     sql = "insert into users (user, pass, salt) values (?, ?, ?);"
@@ -37,6 +70,22 @@ def adduser(username, password, salt=None):
         salt = b16encode(urandom(8))
     passhash = gethash(password, salt)
     database_execute(sql, (username, passhash, salt))
+
+def moduser(username, password, salt=None):
+    sql = "update users set pass=?, salt=? where user=?;"
+    if salt is None:
+        salt = b16encode(urandom(8))
+    passhash = gethash(password, salt)
+    database_execute(sql, (passhash, salt, username))
+    
+def modclient(username, password, salt=None):
+    print "modclient"
+    sql = "update clients set secret = ?, salt = ? where id = ?;"
+    if salt is None:
+        salt = b16encode(urandom(8))
+    passhash = gethash(password, salt)
+    print passhash, salt, username
+    database_execute(sql, (passhash, salt, username))
 
 def delclient(clientname):
     sql = "delete from clients where id = ?;"
