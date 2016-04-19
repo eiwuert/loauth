@@ -25,13 +25,31 @@ Usage:
 ------
 Run LOauth server
   python -m loauth
+Help for additional options
+  python -m loauth -h
 Initialise Database:
   python -m loauth --init-db
 Add user:
-  python -m loauth --add-user USERNAME PASSWORD
+  python -m loauth --add-user USERNAME [--password PASSWORD]
 Delete user:
   python -m loauth --del-user USERNAME
+Change user password:
+  python -m loauth --mod-user USERNAME [--password PASSWORD]
+Test user authentication:
+  python -m loauth --authenticateuser USERNAME [--password PASSWORD]
 Add client:
-  python -m loauth --add-client CLIENT\_ID CLIENT\_SECRET USERNAME
+  python -m loauth --add-client CLIENT\_ID USERNAME [--password CLIENT\_SECRET]
+Change client secret:
+  python -m loauth --mod-client CLIENT\_ID [--password CLIENT\_SECRET]
 Delete client:
   python -m loauth --del-client CLIENT\_ID
+Test client authentication
+   python -m loauth --authenticateclient CLIENT\_ID [--password CLIENT\_SECRET]
+
+
+The '--password' argument is optional. Not providing it where it is listed in
+these examples will make LOauth use getpass to extract said password from the
+terminal instead. Use of the --password parameter is discouraged because shell
+commands are usually logged in a .bash\_history file, and using the --password
+call will then store the password in plain text in said file.
+
