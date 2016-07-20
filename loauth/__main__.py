@@ -7,7 +7,7 @@ from logging import DEBUG
 from logging import StreamHandler
 from BaseHTTPServer import HTTPServer
 from sys import stdout
-from sys import exit
+from sys import exit as sysexit
 from getpass import getpass
 
 from . import OAuth2HTTPRequestHandler
@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
     if result.listuser:
         for user in listusers():
-            print user
+            getLogger(__name__).debug(user)
         start_program = False
 
     if result.listclients != None:
@@ -87,9 +87,9 @@ if __name__ == '__main__':
         else:
             result = listclients()
         for user, clients in result.iteritems():
-            print "Client list for user " + user
+            getLogger(__name__).debug("Client list for user %s", user)
             for client in clients:
-                print " " + client
+                getLogger(__name__).debug(" %s", client)
         start_program = False
 
     if 'newuser' in result and result.newuser !=  None:
@@ -144,13 +144,13 @@ if __name__ == '__main__':
         else:
             password = getpass(prompt="Password: ")
         result = user_pass_authenticate(username, password, False)
-        print result
+        getLogger(__name__).debug(result)
         if result:
-            print "Success"
-            exit(0)
+            getLogger(__name__).debug("Success")
+            sysexit(0)
         else:
-            print "Failure"
-            exit(1)
+            getLogger(__name__).debug("Failure")
+            sysexit(1)
 
     if 'authenticateclient' in result and result.authenticateclient != None:
         logger.info("CLI authentication of " + result.authenticateclient[0])
@@ -160,13 +160,13 @@ if __name__ == '__main__':
         else:
             password = getpass(prompt="Secret: ")
         result = user_pass_authenticate(username, password, True)
-        print result
+        getLogger(__name__).debug(result)
         if result:
-            print "Success"
-            exit(0)
+            getLogger(__name__).debug("Success")
+            sysexit(0)
         else:
-            print "Failure"
-            exit(1)
+            getLogger(__name__).debug("Failure")
+            sysexit(1)
 
     if start_program:
-       run()
+        run()

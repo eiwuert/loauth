@@ -54,7 +54,7 @@ def database_execute(command, params=None):
     elif (dbtype == "sqlite3") or (dbtype == "sqlite"):
         return sqlite_execute(command, params)
     else:
-        print("Unknown database type, cannot continue")
+        getLogger(__name__).info("Unknown database type, cannot continue")
 
 
 def sqlite_execute(command, params=None):
@@ -67,7 +67,7 @@ def sqlite_execute(command, params=None):
     @returns a list of dictionaries representing the sql result
     """
     # NOTE mostly copypasta'd from mysql_execute, may be a better way
-    getLogger("database").debug("sqlite_execute(" + command + ", " +
+    getLogger(__name__).debug("sqlite_execute(" + command + ", " +
                                 str(params) + ")", extra=get_sql_log_dict())
     try:
         parser = ConfigSingleton()
@@ -87,9 +87,9 @@ def sqlite_execute(command, params=None):
         connection.commit()
         return cursor.fetchall()
     except MySQLError as mysqlerror:
-        print("MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1]))
+        getLogger(__name__).info("MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1]))
     except NoSectionError:
-        print("Please configure the database")
+        getLogger(__name__).info("Please configure the database")
     finally:
         try:
             if connection:
@@ -123,7 +123,7 @@ def mysql_execute(command, params=None):
         connection.commit()
         return cursor.fetchall()
     except MySQLError as mysqlerror:
-        print("MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1]))
+        getLogger(__name__).info("MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1]))
     finally:
         try:
             if connection:
