@@ -23,13 +23,16 @@ from sqlite3 import connect as sqlite_connect
 from .config import ConfigSingleton
 
 def get_sql_log_dict():
+    """
+    return a few tuples with database related information for logging
+    """
     parser = ConfigSingleton()
     dbtype = parser.get('database', 'type')
     if dbtype == 'sqlite':
         ip = parser.get('database', 'filename')
     else:
         ip = parser.get('database', 'hostname')
-    return { 'ip': ip, 'user': '', 'path': 'database/' }
+    return {'ip': ip, 'user': '', 'path': 'database/'}
 
 def database_execute(command, params=None):
     """
@@ -41,7 +44,7 @@ def database_execute(command, params=None):
     @returns a list of dictionaries representing the sql result
     """
     getLogger("database").info("database_execute(" + command + ", " +
-                                str(params) + ")", extra=get_sql_log_dict())
+                               str(params) + ")", extra=get_sql_log_dict())
     parser = ConfigSingleton()
     dbtype = parser.get('database', 'type')
 
@@ -68,7 +71,7 @@ def sqlite_execute(command, params=None):
     """
     # NOTE mostly copypasta'd from mysql_execute, may be a better way
     getLogger(__name__).debug("sqlite_execute(" + command + ", " +
-                                str(params) + ")", extra=get_sql_log_dict())
+                              str(params) + ")", extra=get_sql_log_dict())
     try:
         parser = ConfigSingleton()
         filename = parser.get('database', 'filename')
@@ -142,7 +145,9 @@ def get_key_and_iv(localbox_path, user):
     sql = "select key, iv from keys where path = ? and user = ?"
     try:
         result = database_execute(sql, (localbox_path, user))[0]
-    except(IndexError):
-        getLogger("database").debug("cannot find key", extra={'ip': '', 'user': user, 'path': localbox_path})
+    except IndexError:
+        getLogger("database").debug("cannot find key",
+                                    extra={'ip': '', 'user': user,
+                                           'path': localbox_path})
         result = None
     return result

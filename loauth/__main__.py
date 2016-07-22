@@ -45,14 +45,8 @@ def run():
     httpd.serve_forever()
     #httpd.handle_request()
 
-if __name__ == '__main__':
-    setup_logging()
-    
-    logger = getLogger('loauth')
-    start_program = True
+def parse_arguments():
     parser = ArgumentParser(description="Libbit OAuth Server")
-
-#, metavar=("USERNAME","PASSWORD"))
     parser.add_argument('--add-user', dest='newuser', nargs=1, help="add a new user", metavar=("USERNAME"))
     parser.add_argument('--mod-user', dest='moduser', nargs=1, help="change the password of a user", metavar=("USERNAME"))
     parser.add_argument('--del-user', dest='deluser', nargs=1, help="remove a user", metavar=("USERNAME"))
@@ -67,7 +61,14 @@ if __name__ == '__main__':
 
     parser.add_argument('--init-db', dest='initdb', action='store_true', help="Initialise Database")
     parser.add_argument('--password', dest='password', nargs=1, help="use PASSWORD for this user/client", metavar=("PASSWORD"))
-    result = parser.parse_args()
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    setup_logging()
+    
+    logger = getLogger('loauth')
+    start_program = True
+    result = parse_arguments()
 
     if result.initdb:
         logger.info("cli init database")

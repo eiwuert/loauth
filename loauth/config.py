@@ -14,6 +14,9 @@ except ImportError:
 
 
 def prepare_logger(name, loglevel=None, handlers=None):
+    """
+    Make sure the logging subsystem is initialized correctly
+    """
     if handlers is None:
         handlers = [StreamHandler()]
     log = getLogger(name)

@@ -43,8 +43,8 @@ def addclient(client_id, client_secret, user=None, salt=None):
 def listusers():
     sql = "select user from users;"
     result = [str(elem[0]) for elem in database_execute(sql)]
-    
     return result
+
 
 def listclients(user=None):
     sql = "select user, id from clients"
