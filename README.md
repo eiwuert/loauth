@@ -40,7 +40,7 @@ Usage:
 * Test user authentication:
   `python -m loauth --authenticateuser USERNAME [--password PASSWORD]`
 * Add client:
-  `python -m loauth --add-client CLIENT\_ID USERNAME [--password CLIENT\_SECRET]`
+  `python -m loauth --add-client CLIENT\_ID CLIENT\_SECRET USERNAME`
 * Change client secret:
   `python -m loauth --mod-client CLIENT\_ID [--password CLIENT\_SECRET]`
 * Delete client:
