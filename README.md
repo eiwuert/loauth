@@ -17,9 +17,11 @@ to be configured. In case of sqlite, only a filename needs to be configured. An
 example configuration for sqlite follows (make sure that the user running the
 loauth program can actually edit that database:
 
+```ini
 [database]
 type = sqlite
 filename = /var/lib/loauth/database.sqlite3
+```
 
 Usage:
 ------
