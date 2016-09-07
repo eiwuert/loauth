@@ -2,7 +2,7 @@
 -----------------------------------------------------------------------
 
 * install .egg file
-* install database definitions
 * create users in the database
+  python -m loauth --add-user username --password password
 
 

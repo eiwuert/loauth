@@ -20,35 +20,54 @@ from oauthlib.common import generate_client_id
 
 from .database import database_execute
 
+
 def create_database():
-    for sql in ["PRAGMA foreign_keys = ON;",
-                "create table users (user char(255) primary key, pass char(255), salt char(255));",
-                "create table clients (id char(255) primary key, secret char(255), salt char(255), user char(255), foreign key(user) references users(user) on update cascade on delete cascade);",
-                "create table authentication_code(client_id char(31), authcode char(31), foreign key(client_id) references clients(id) on update cascade on delete cascade);",
-                "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255), foreign key(client_id) references clients(id) on update cascade on delete cascade);"]:
+    """
+    create and initially fill in the database
+    """
+    for sql in [
+            "PRAGMA foreign_keys = ON;",
+            "create table users (user char(255) primary key, pass char(255), salt char(255));",
+            "create table clients (id char(255) primary key, secret char(255), salt char(255), user char(255), foreign key(user) references users(user) on update cascade on delete cascade);",
+            "create table authentication_code(client_id char(31), authcode char(31), foreign key(client_id) references clients(id) on update cascade on delete cascade);",
+            "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255), foreign key(client_id) references clients(id) on update cascade on delete cascade);"]:
         database_execute(sql)
 
 
 def gethash(password, salt):
+    """
+    return a password hashed with a salt
+    """
     passhash = sha512(str(salt) + password).hexdigest()
     return passhash
 
+
 def addclient(client_id, client_secret, user=None, salt=None):
+    """
+    add a new client to the database
+    """
     sql = "insert into clients (id, secret, salt, user) values (?, ?, ?, ?);"
     if salt is None:
         salt = b16encode(urandom(8))
     passhash = gethash(client_secret, salt)
     database_execute(sql, (client_id, passhash, salt, user))
 
+
 def listusers():
+    """
+    list the users registered on this system
+    """
     sql = "select user from users;"
     result = [str(elem[0]) for elem in database_execute(sql)]
     return result
 
 
 def listclients(user=None):
+    """
+    list the clients registered on this system
+    """
     sql = "select user, id from clients"
-    if user != None:
+    if user is not None:
         sql = sql + " where user = ?;"
         result = database_execute(sql, (user))
     else:
@@ -62,53 +81,84 @@ def listclients(user=None):
         else:
             users[user] = [client]
     return users
-        
+
 
 def adduser(username, password, salt=None):
+    """
+    add a new user with the given password. if salt is None, a new rndom salt will be used.
+    """
     sql = "insert into users (user, pass, salt) values (?, ?, ?);"
     if salt is None:
+        # TODO: use Crypto random instead
         salt = b16encode(urandom(8))
     passhash = gethash(password, salt)
     database_execute(sql, (username, passhash, salt))
 
+
 def moduser(username, password, salt=None):
+    """
+    change password for a certain user
+    """
     sql = "update users set pass=?, salt=? where user=?;"
     if salt is None:
         salt = b16encode(urandom(8))
     passhash = gethash(password, salt)
     database_execute(sql, (passhash, salt, username))
-    
+
+
 def modclient(username, password, salt=None):
-    getLogger(__name__).debug("modclient(%s, %s, %s)", username, password, salt)
+    """
+    change password for a certain client
+    """
+    getLogger(__name__).debug(
+        "modclient(%s, %s, %s)",
+        username,
+        password,
+        salt)
     sql = "update clients set secret = ?, salt = ? where id = ?;"
     if salt is None:
         salt = b16encode(urandom(8))
     passhash = gethash(password, salt)
     database_execute(sql, (passhash, salt, username))
 
+
 def delclient(clientname):
+    """
+    remove a client from the system
+    """
     sql = "delete from clients where id = ?;"
     database_execute(sql, (clientname,))
 
+
 def deluser(username):
+    """
+    remove a user and associated clients from this system
+    """
     sql = "delete from users where user = ?;"
     database_execute(sql, (username,))
     sql = "delete from clients where user = ?;"
     database_execute(sql, (username,))
 
+
 class ClientStub:
+    """
+    stub to represent a client
+    """
     def __init__(self, client_id):
         self.client_id = client_id
+
     def __str__(self):
-        return "Client: "+self.client_id
+        return "Client: " + self.client_id
+
 
 def clear_bearer_tokens(client_id):
     """
     remove excess tokens
     """
-    getLogger(__name__).debug("clear_bearer_tokens(" + client_id+")")
+    getLogger(__name__).debug("clear_bearer_tokens(" + client_id + ")")
     sql = "delete from bearer_tokens where client_id = ?;"
     database_execute(sql, (client_id, ))
+
 
 class LoauthRequestValidator(RequestValidator):
     """
@@ -117,7 +167,7 @@ class LoauthRequestValidator(RequestValidator):
     def __init__(self, *args, **kwargs):
         self.username = None
         self.user = None
-        self.name = None 
+        self.name = None
         self.client = None
         RequestValidator.__init__(self, *args, **kwargs)
 
@@ -128,7 +178,9 @@ class LoauthRequestValidator(RequestValidator):
         security gained from this is practially none.
         """
         getLogger(__name__).debug("validate_client_id(" + client_id + ")")
-        result = database_execute("select * from clients where id = " + client_id)
+        result = database_execute(
+            "select * from clients where id = ?",
+            (client_id))
         if result is None:
             return False
         return len(result) == 1
@@ -137,17 +189,35 @@ class LoauthRequestValidator(RequestValidator):
         """
         Redirect url for when none is given
         """
-        getLogger(__name__).debug("get_default_redirect_uri(" + client_id + ")")
+        getLogger(__name__).debug(
+            "get_default_redirect_uri(" + client_id + ")")
         return 'http://localhost:8000/authenticated'
 
-    def validate_redirect_uri(self, client_id, redirect_uri, request, *args, **kwargs):
+    def validate_redirect_uri(
+            self,
+            client_id,
+            redirect_uri,
+            request,
+            *args,
+            **kwargs):
         """
         TODO: check validity if redirect uri
         """
-        getLogger(__name__).debug("validate_redirect_uri(" + client_id + ", " + redirect_uri + ")")
+        getLogger(__name__).debug(
+            "validate_redirect_uri(" +
+            client_id +
+            ", " +
+            redirect_uri +
+            ")")
         return True
 
-    def save_authorization_code(self, client_id, code, request, *args, **kwargs):
+    def save_authorization_code(
+            self,
+            client_id,
+            code,
+            request,
+            *args,
+            **kwargs):
         """
         TODO: save authcode
         """
@@ -162,7 +232,8 @@ class LoauthRequestValidator(RequestValidator):
         checks the validity of the response_type value.
         """
         getLogger(__name__).debug("validate_response_type()")
-        #TODO: filter certain response types because we cannot build certain things
+        # TODO: filter certain response types because we cannot build certain
+        # things
         types = response_type.split(" ")
         return_value = True
         for rtype in types:
@@ -185,8 +256,22 @@ class LoauthRequestValidator(RequestValidator):
         getLogger(__name__).debug("validate_scopes()")
         return True
 
-    def validate_user(self, username, password, client, request, *args, **kwargs):
-        getLogger(__name__).debug("validate_user(" + username + ", " + password + ", " + str(client) + ")")
+    def validate_user(
+            self,
+            username,
+            password,
+            client,
+            request,
+            *args,
+            **kwargs):
+        getLogger(__name__).debug(
+            "validate_user(" +
+            username +
+            ", " +
+            password +
+            ", " +
+            str(client) +
+            ")")
         result = user_pass_authenticate(username, password)
         if result:
             self.user = username
@@ -205,34 +290,44 @@ class LoauthRequestValidator(RequestValidator):
         getLogger(__name__).debug("authenticate_client()")
         bodydict = dict(request.decoded_body)
         if ((request.headers.get('username', '') != '' and
-           request.headers.get('password', '') != '' and
-           request.headers.get('grant_type', '') == 'password') or
-           (bodydict.get('username') != None and
-           bodydict.get('password') != None and
-           bodydict.get('grant_type') == 'password')):
+             request.headers.get('password', '') != '' and
+             request.headers.get('grant_type', '') == 'password') or
+                (bodydict.get('username') is not None and
+                 bodydict.get('password') is not None and
+                 bodydict.get('grant_type') == 'password')):
 
-            getLogger(__name__).info("This is a localbox special situation. Adding Client based on user/pass")
-            client_id = request.headers.get('client_id', bodydict.get('client_id'))
+            getLogger(__name__).info(
+                "This is a localbox special situation. Adding Client based on user/pass")
+            client_id = request.headers.get(
+                'client_id',
+                bodydict.get('client_id'))
             sql = "select 1 from clients where id = ?;"
             result = database_execute(sql, (client_id,))
             if result == []:
                 getLogger(__name__).info("client not found")
                 request.client_id = client_id
                 request.client = ClientStub(client_id)
-                client_secret = request.headers.get('client_secret', bodydict.get('client_secret'))
+                client_secret = request.headers.get(
+                    'client_secret',
+                    bodydict.get('client_secret'))
                 addclient(client_id, client_secret)
                 return True
             return False
 
-        authorization_header_contents = request.headers.get('authorization', '')
+        authorization_header_contents = request.headers.get(
+            'authorization',
+            '')
         if authorization_header_contents != '':
             # basic http authentication unpacking
-            client_id = b64decode(authorization_header_contents.split(" ")[1]).split(":")[0]
+            client_id = b64decode(
+                authorization_header_contents.split(" ")[1]).split(":")[0]
 
             if (authorization_header_contents[:5] == 'Basic'):
-                result = basic_http_authenticate(authorization_header_contents, True)
+                result = basic_http_authenticate(
+                    authorization_header_contents,
+                    True)
                 request.client = ClientStub(client_id)
-                #validation related
+                # validation related
                 request.client_id = client_id
                 return result
         else:
@@ -252,7 +347,13 @@ class LoauthRequestValidator(RequestValidator):
         getLogger(__name__).debug("get_original_scopes()")
         return 'all'
 
-    def invalidate_authorization_code(self, client_id, code, request, *args, **kwargs):
+    def invalidate_authorization_code(
+            self,
+            client_id,
+            code,
+            request,
+            *args,
+            **kwargs):
         getLogger(__name__).debug("invalidate_authorization_code()")
         sql = "delete from authentication_code where client_id = ? and authcode = ?;"
         database_execute(sql, (client_id, code))
@@ -263,8 +364,18 @@ class LoauthRequestValidator(RequestValidator):
         clear_bearer_tokens(request.client.client_id)
 
         sql = "insert into bearer_tokens (access_token, refresh_token, expires, scopes, client_id) values (?, ?, ?, ?, ?)"
-        enddate =  datetime.now() + timedelta(0, token['expires_in'], 0, 0, 0, 0)
-        params = (token.get('access_token'), token.get('refresh_token'), enddate, token.get('scope'), request.client.client_id)
+        enddate = datetime.now() + timedelta(0,
+                                             token['expires_in'],
+                                             0,
+                                             0,
+                                             0,
+                                             0)
+        params = (
+            token.get('access_token'),
+            token.get('refresh_token'),
+            enddate,
+            token.get('scope'),
+            request.client.client_id)
         database_execute(sql, params)
 
     def validate_bearer_token(self, token, scopes, request):
@@ -282,17 +393,24 @@ class LoauthRequestValidator(RequestValidator):
 
     def validate_code(self, client_id, code, client, request, *args, **kwargs):
         getLogger(__name__).debug("validate_code()")
-        #OBS! The request.user attribute should be set to the resource owner
-        #associated with this authorization code. Similarly request.scopes and
-        #request.state must also be set.
-        #request.scopes="
+        # OBS! The request.user attribute should be set to the resource owner
+        # associated with this authorization code. Similarly request.scopes and
+        # request.state must also be set.
+        # request.scopes="
         sql = "selectc 1 from code where client_id = ? and authcode = ? and expires > datetime('now');"
         result = database_execute(sql, (client_id, code))
         if result is None:
             return False
-        return len(result)==1
+        return len(result) == 1
 
-    def validate_grant_type(self, client_id, grant_type, client, request, *args, **kwargs):
+    def validate_grant_type(
+            self,
+            client_id,
+            grant_type,
+            client,
+            request,
+            *args,
+            **kwargs):
         getLogger(__name__).debug("validate_grant_type()")
         if (grant_type == 'client_credentials'):
             sql = "select user from clients where id = ?"
@@ -301,8 +419,19 @@ class LoauthRequestValidator(RequestValidator):
         else:
             return True
 
-    def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
-        getLogger(__name__).debug("validate_refresh_token(" + refresh_token + ", " + client + ")")
+    def validate_refresh_token(
+            self,
+            refresh_token,
+            client,
+            request,
+            *args,
+            **kwargs):
+        getLogger(__name__).debug(
+            "validate_refresh_token(" +
+            refresh_token +
+            ", " +
+            client +
+            ")")
         sql = "select 1 from bearer_tokens where refresh_token = ? and client_id = ? and expires > datetime('now');"
         params = refresh_token, client.client_id
         result = database_execute(sql, params)
@@ -310,20 +439,31 @@ class LoauthRequestValidator(RequestValidator):
             return False
         return len(result) == 1
 
-
     def confirm_redirect_uri(self, client_id, code, redirect_uri, client,
-            *args, **kwargs):
+                             *args, **kwargs):
         getLogger(__name__).debug("confirm_redirect_uri()")
         return True
 
-def user_pass_authenticate(username, password, authenticate_client = False):
-    getLogger(__name__).debug("user_pass_authenticate(" + username + ", " + password + ", " + str(authenticate_client) + ")")
+
+def user_pass_authenticate(username, password, authenticate_client=False):
+    getLogger(__name__).debug(
+        "user_pass_authenticate(" +
+        username +
+        ", " +
+        password +
+        ", " +
+        str(authenticate_client) +
+        ")")
     if authenticate_client:
-        result = database_execute("select secret, salt from clients where id = ?;", (username,))
+        result = database_execute(
+            "select secret, salt from clients where id = ?;", (username,))
     else:
-        result = database_execute("select pass, salt from users where user = ?;", (username,))
+        result = database_execute(
+            "select pass, salt from users where user = ?;", (username,))
     if result == []:
-        getLogger(__name__).debug("Cannot find user %s to authenticate.", username)
+        getLogger(__name__).debug(
+            "Cannot find user %s to authenticate.",
+            username)
         return False
     else:
         passhash = str(result[0][0])
@@ -333,16 +473,25 @@ def user_pass_authenticate(username, password, authenticate_client = False):
         if success:
             getLogger(__name__).debug("Authentication successful")
         else:
-            getLogger(__name__).debug("Authentication failed due to wrong password")
+            getLogger(__name__).debug(
+                "Authentication failed due to wrong password")
         return success
 
-def basic_http_authenticate(authorization_header_contents, authenticate_client=False):
+
+def basic_http_authenticate(
+        authorization_header_contents,
+        authenticate_client=False):
     """
     Does (basic) HTTP authentication
     example line: Basic bmlkbzpwYXNzOm9yZA==
     NOTE: This implementation cannot handle usernames with colons.
     """
-    getLogger(__name__).debug("basic_http_authenticate(" + authorization_header_contents+ ", " + str(authenticate_client) + ")")
+    getLogger(__name__).debug(
+        "basic_http_authenticate(" +
+        authorization_header_contents +
+        ", " +
+        str(authenticate_client) +
+        ")")
     if authorization_header_contents is None:
         return False
     try:
@@ -353,9 +502,14 @@ def basic_http_authenticate(authorization_header_contents, authenticate_client=F
         return False
     data = b64decode(authdata)
     username, password = data.split(":", 1)
-    return user_pass_authenticate(username, password, authenticate_client=authenticate_client)
+    return user_pass_authenticate(
+        username,
+        password,
+        authenticate_client=authenticate_client)
+
 
 class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
+
     """
     handles oauth requests
     """
@@ -368,7 +522,8 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(content_length)
         credentials = None
         try:
-            headers, body, status = self.authserver.create_token_response(self.path, self.command, body, self.headers, credentials)
+            headers, body, status = self.authserver.create_token_response(
+                self.path, self.command, body, self.headers, credentials)
             self.send_response(status)
             for key, value in headers.iteritems():
                 self.send_header(key, value)
@@ -381,7 +536,7 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
             if error.description:
                 self.wfile.write(error.description)
                 getLogger(__name__).info("Description: %s", error.description)
-        
+
     def do_GET(self):  # pylint: disable=invalid-name
         """
         handle a HTTP GET request
@@ -389,9 +544,9 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
         getLogger(__name__).debug("do_GET()")
         content_length = self.headers.getheader('Content-Length', 0)
         body = self.rfile.read(content_length)
-        
+
         parsed_path = parse(self.path).path
-        #if parsed_path == "/register":
+        # if parsed_path == "/register":
         #    print "registring"
         #    client_id = generate_client_id()
         #    client_secret = generate_client_id()
@@ -403,12 +558,14 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
         #    return
         if parsed_path == "/verify":
             getLogger(__name__).debug("Verify path")
-            auth_header_contents = self.headers.getheader('Authorization','')
+            auth_header_contents = self.headers.getheader('Authorization', '')
             if auth_header_contents != '':
                 try:
                     ttype, token = auth_header_contents.split(' ')
                 except ValueError:
-                    getLogger(__name__).critical("Problem parsing authorization header: %s", auth_header_contents)
+                    getLogger(__name__).critical(
+                        "Problem parsing authorization header: %s",
+                        auth_header_contents)
                     self.send_response(403)
                     return
                 if ttype != 'Bearer':
@@ -435,17 +592,23 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
                 scopes, credentials = self.authserver.validate_authorization_request(
                     self.path, self.command, body, self.headers)
                 # store credentials somewhere
-                headers, body, status = self.authserver.create_authorization_response(self.path, self.command, body, self.headers, scopes, credentials)
+                headers, body, status = self.authserver.create_authorization_response(
+                    self.path, self.command, body, self.headers, scopes, credentials)
                 self.send_response(status)
                 for key, value in headers.iteritems():
                     self.send_header(key, value)
                 self.end_headers()
             except OAuth2Error as error:
-                getLogger(__name__).critical("OAuth2 Error: %s: %s", error.__class__.__name__, error.error)
+                getLogger(__name__).critical(
+                    "OAuth2 Error: %s: %s",
+                    error.__class__.__name__,
+                    error.error)
                 if error.message:
                     self.wfile.write(error.message)
                     getLogger(__name__).debug("Message: %s", error.message)
                 if error.description:
                     self.wfile.write(error.description)
-                    getLogger(__name__).debug("Description: %s", error.description)
+                    getLogger(__name__).debug(
+                        "Description: %s",
+                        error.description)
         return

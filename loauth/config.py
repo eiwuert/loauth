@@ -26,6 +26,7 @@ def prepare_logger(name, loglevel=None, handlers=None):
 
 
 class ConfigSingleton(object):
+
     """
     Singleton which has all configruation related info.
     """

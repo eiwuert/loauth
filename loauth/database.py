@@ -22,6 +22,7 @@ from sqlite3 import connect as sqlite_connect
 
 from .config import ConfigSingleton
 
+
 def get_sql_log_dict():
     """
     return a few tuples with database related information for logging
@@ -33,6 +34,7 @@ def get_sql_log_dict():
     else:
         ip = parser.get('database', 'hostname')
     return {'ip': ip, 'user': '', 'path': 'database/'}
+
 
 def database_execute(command, params=None):
     """
@@ -81,7 +83,7 @@ def sqlite_execute(command, params=None):
         cursor = connection.cursor()
         cursor.execute('PRAGMA foreign_keys = ON;')
         connection.commit()
-        if cursor.fetchall() == None:
+        if cursor.fetchall() is None:
             exit("cannot do foreign keys on this SQLite database, exiting")
         if params:
             cursor.execute(command, params)
@@ -90,7 +92,9 @@ def sqlite_execute(command, params=None):
         connection.commit()
         return cursor.fetchall()
     except MySQLError as mysqlerror:
-        getLogger(__name__).info("MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1]))
+        getLogger(__name__).info(
+            "MySQL Error: %d: %s" %
+            (mysqlerror.args[0], mysqlerror.args[1]))
     except NoSectionError:
         getLogger(__name__).info("Please configure the database")
     finally:
@@ -126,7 +130,9 @@ def mysql_execute(command, params=None):
         connection.commit()
         return cursor.fetchall()
     except MySQLError as mysqlerror:
-        getLogger(__name__).info("MySQL Error: %d: %s" % (mysqlerror.args[0], mysqlerror.args[1]))
+        getLogger(__name__).info(
+            "MySQL Error: %d: %s" %
+            (mysqlerror.args[0], mysqlerror.args[1]))
     finally:
         try:
             if connection:
