@@ -4,6 +4,7 @@ Module holding configuration and configparser related functions
 
 from logging import getLogger
 from logging import StreamHandler
+import os
 try:
     from ConfigParser import ConfigParser
     from ConfigParser import NoOptionError, NoSectionError
@@ -42,8 +43,8 @@ class ConfigSingleton(object):
         if not hasattr(self, 'configparser'):
             self.configparser = ConfigParser()
             if not location:
-                self.configparser.read(['/etc/loauth.ini', '~/loauth.ini',
-                                        '~/.config/loauth/config.ini',
+                self.configparser.read(['/etc/loauth.ini', os.path.expanduser('~/loauth.ini'),
+                                        os.path.expanduser('~/.config/loauth/config.ini'),
                                         'loauth.ini'])
             else:
                 self.configparser.read(location)
