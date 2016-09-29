@@ -18,8 +18,10 @@ from oauthlib.oauth2 import Server
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from oauthlib.common import generate_client_id
 
-from .database import database_execute
+from loauth.database import database_execute
+import loxcommon.config as lox_config
 
+lox_config.ConfigSingleton(__name__)
 
 def create_database():
     """

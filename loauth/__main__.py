@@ -1,25 +1,27 @@
 """
 oauth implementation testing skeleton
 """
+from BaseHTTPServer import HTTPServer
 from argparse import ArgumentParser
-from logging import getLogger
+from getpass import getpass
 from logging import DEBUG
 from logging import StreamHandler
-from BaseHTTPServer import HTTPServer
-from sys import stdout
+from logging import getLogger
 from sys import exit as sysexit
-from getpass import getpass
+from sys import stdout
+
+import loxcommon.config as lox_config
 
 from . import OAuth2HTTPRequestHandler
-from . import adduser
-from . import listusers
-from . import listclients
-from . import deluser
-from . import delclient
 from . import addclient
-from . import moduser
-from . import modclient
+from . import adduser
 from . import create_database
+from . import delclient
+from . import deluser
+from . import listclients
+from . import listusers
+from . import modclient
+from . import moduser
 from . import user_pass_authenticate
 
 
@@ -45,7 +47,8 @@ def run():
     start the test server.
     """
     getLogger("loauth").debug("start program")
-    server_address = ('', 8000)
+    port = lox_config.ConfigSingleton().getint('httpd', 'port', 8000)
+    server_address = ('', port)
     httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
     httpd.serve_forever()
     # httpd.handle_request()
@@ -132,6 +135,7 @@ def parse_arguments():
         help="use PASSWORD for this user/client",
         metavar=("PASSWORD"))
     return parser.parse_args()
+
 
 if __name__ == '__main__':
     setup_logging()
