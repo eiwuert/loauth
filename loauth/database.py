@@ -5,6 +5,9 @@ Database implementation class
 from logging import getLogger
 from os.path import exists
 from sqlite3 import Binary
+
+from loauth import module
+
 try:
     from ConfigParser import NoSectionError
 except ImportError:
@@ -26,7 +29,7 @@ def get_sql_log_dict():
     """
     return a few tuples with database related information for logging
     """
-    parser = lox_config.ConfigSingleton()
+    parser = lox_config.ConfigSingleton(module.NAME)
     dbtype = parser.get('database', 'type')
     if dbtype == 'sqlite':
         ip = parser.get('database', 'filename')
@@ -46,7 +49,7 @@ def database_execute(command, params=None):
     """
     getLogger("database").info("database_execute(" + command + ", " +
                                str(params) + ")", extra=get_sql_log_dict())
-    parser = lox_config.ConfigSingleton()
+    parser = lox_config.ConfigSingleton(module.NAME)
     dbtype = parser.get('database', 'type')
 
     if dbtype == "mysql":
@@ -74,7 +77,7 @@ def sqlite_execute(command, params=None):
     getLogger(__name__).debug("sqlite_execute(" + command + ", " +
                               str(params) + ")", extra=get_sql_log_dict())
     try:
-        parser = lox_config.ConfigSingleton()
+        parser = lox_config.ConfigSingleton(module.NAME)
         filename = parser.get('database', 'filename')
         init_db = not exists(filename)
         connection = sqlite_connect(filename)
@@ -115,7 +118,7 @@ def mysql_execute(command, params=None):
     """
     getLogger("database").debug("mysql_execute(" + command + ", " + str(params)
                                 + ")", extra=get_sql_log_dict())
-    parser = lox_config.ConfigSingleton()
+    parser = lox_config.ConfigSingleton(module.NAME)
     try:
         host = parser.get('database', 'hostname')
         user = parser.get('database', 'username')

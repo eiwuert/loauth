@@ -11,6 +11,8 @@ from sys import exit as sysexit
 from sys import stdout
 
 import loxcommon.config as lox_config
+from loauth import module
+from loxcommon.log import prepare_logging
 
 from . import OAuth2HTTPRequestHandler
 from . import addclient
@@ -47,7 +49,7 @@ def run():
     start the test server.
     """
     getLogger("loauth").debug("start program")
-    port = lox_config.ConfigSingleton().getint('httpd', 'port', 8000)
+    port = lox_config.ConfigSingleton(module.NAME).getint('httpd', 'port', 8000)
     server_address = ('', port)
     httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
     httpd.serve_forever()
@@ -138,7 +140,8 @@ def parse_arguments():
 
 
 if __name__ == '__main__':
-    setup_logging()
+    configparser = lox_config.ConfigSingleton('loauth', defaults={'console': False})
+    prepare_logging(configparser)
 
     logger = getLogger('loauth')
     start_program = True
