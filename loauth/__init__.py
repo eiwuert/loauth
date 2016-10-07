@@ -432,7 +432,7 @@ class LoauthRequestValidator(RequestValidator):
             "validate_refresh_token(" +
             refresh_token +
             ", " +
-            client +
+            str(client.client_id) +
             ")")
         sql = "select 1 from bearer_tokens where refresh_token = ? and client_id = ? and expires > datetime('now');"
         params = refresh_token, client.client_id
