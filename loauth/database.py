@@ -21,7 +21,6 @@ except ImportError:
 
 from sqlite3 import connect as sqlite_connect
 
-
 import loxcommon.config as lox_config
 
 
@@ -141,21 +140,3 @@ def mysql_execute(command, params=None):
                 connection.close()
         except UnboundLocalError:
             pass
-
-
-def get_key_and_iv(localbox_path, user):
-    """
-    Fetches RSA encrypted key and IV from the database
-    @param localbox_path (localbox specific) path to the encrypted file
-    @param user name of whoes key to fetch
-    @return a tuple containing the key and iv for a certain file.
-    """
-    sql = "select key, iv from keys where path = ? and user = ?"
-    try:
-        result = database_execute(sql, (localbox_path, user))[0]
-    except IndexError:
-        getLogger("database").debug("cannot find key",
-                                    extra={'ip': '', 'user': user,
-                                           'path': localbox_path})
-        result = None
-    return result

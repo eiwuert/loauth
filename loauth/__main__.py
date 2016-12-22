@@ -1,7 +1,10 @@
 """
 oauth implementation testing skeleton
 """
-from BaseHTTPServer import HTTPServer
+try:
+    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+except:
+    from http.server import BaseHTTPRequestHandler, HTTPServer
 from argparse import ArgumentParser
 from getpass import getpass
 from logging import DEBUG
@@ -13,7 +16,6 @@ from sys import stdout
 import loxcommon.config as lox_config
 from loauth import module
 from loxcommon.log import prepare_logging
-
 from . import OAuth2HTTPRequestHandler
 from . import addclient
 from . import adduser
