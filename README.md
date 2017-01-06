@@ -66,3 +66,9 @@ terminal instead. Use of the --password parameter is discouraged because shell
 commands are usually logged in a .bash\_history file, and using the --password
 call will then store the password in plain text in said file.
 
+Dependencies:
+-------------
+
+```bash
+sudo apt-get install python-pip python-dev libmysqlclient-dev
+```

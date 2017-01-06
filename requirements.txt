@@ -1,0 +1,2 @@
+oauthlib==2.0.1
+MySQL-python==1.2.5
