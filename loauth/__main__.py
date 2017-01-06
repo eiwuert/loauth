@@ -1,6 +1,8 @@
 """
 oauth implementation testing skeleton
 """
+from loauth import defaults
+
 try:
     from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 except:
@@ -51,18 +53,17 @@ def run():
     start the test server.
     """
     getLogger("loauth").debug("start program")
-    port = lox_config.ConfigSingleton(module.NAME).getint('httpd', 'port', 8000)
+    port = lox_config.ConfigSingleton(module.NAME).getint('httpd', 'port', defaults.HTTP_PORT)
     server_address = ('', port)
     httpd = HTTPServer(server_address, OAuth2HTTPRequestHandler)
     httpd.serve_forever()
-    # httpd.handle_request()
 
 
 def parse_arguments():
     """
     parse command line arguments
     """
-    parser = ArgumentParser(description="Libbit OAuth Server")
+    parser = ArgumentParser(description="LocalBox OAuth Server")
     parser.add_argument(
         '--add-user',
         dest='newuser',
