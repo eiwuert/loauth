@@ -1,0 +1,10 @@
+[Unit]
+Description=Loauth server
+
+[Service]
+Type=idle
+ExecStart=/usr/local/bin/loauth.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

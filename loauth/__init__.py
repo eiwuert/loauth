@@ -1,38 +1,42 @@
 """
 oauth implementation testing skeleton
 """
-from json import dumps
-from logging import getLogger
-from urlparse import urlparse as parse
+try:
+    from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+except:
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+from base64 import b16encode
+from base64 import b64decode
+from datetime import datetime, timedelta
 from hashlib import sha512
+from logging import getLogger
 from os import urandom
 
-from BaseHTTPServer import BaseHTTPRequestHandler
-from base64 import b64decode
-from base64 import b16encode
-from datetime import datetime, timedelta
-
-from MySQLdb import Error
 from oauthlib.oauth2 import RequestValidator
 from oauthlib.oauth2 import Server
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
-from oauthlib.common import generate_client_id
 
-from loauth.database import database_execute
+try:
+    from urlparse import urlparse as parse
+except:
+    from urllib.parse import urlparse as parse
+
 import loxcommon.config as lox_config
+from loauth.database import database_execute
 
 lox_config.ConfigSingleton(__name__)
+
 
 def create_database():
     """
     create and initially fill in the database
     """
     for sql in [
-            "PRAGMA foreign_keys = ON;",
-            "create table users (user char(255) primary key, pass char(255), salt char(255));",
-            "create table clients (id char(255) primary key, secret char(255), salt char(255), user char(255), foreign key(user) references users(user) on update cascade on delete cascade);",
-            "create table authentication_code(client_id char(31), authcode char(31), foreign key(client_id) references clients(id) on update cascade on delete cascade);",
-            "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255), foreign key(client_id) references clients(id) on update cascade on delete cascade);"]:
+        "PRAGMA foreign_keys = ON;",
+        "create table users (user char(255) primary key, pass char(255), salt char(255));",
+        "create table clients (id char(255) primary key, secret char(255), salt char(255), user char(255), foreign key(user) references users(user) on update cascade on delete cascade);",
+        "create table authentication_code(client_id char(31), authcode char(31), foreign key(client_id) references clients(id) on update cascade on delete cascade);",
+        "create table bearer_tokens(access_token char(31), refresh_token char(31), expires datetime, scopes char(255), client_id char(255), foreign key(client_id) references clients(id) on update cascade on delete cascade);"]:
         database_execute(sql)
 
 
@@ -146,6 +150,7 @@ class ClientStub:
     """
     stub to represent a client
     """
+
     def __init__(self, client_id):
         self.client_id = client_id
 
@@ -159,13 +164,14 @@ def clear_bearer_tokens(client_id):
     """
     getLogger(__name__).debug("clear_bearer_tokens(" + client_id + ")")
     sql = "delete from bearer_tokens where client_id = ?;"
-    database_execute(sql, (client_id, ))
+    database_execute(sql, (client_id,))
 
 
 class LoauthRequestValidator(RequestValidator):
     """
     Checks correctness of the various aspects of the oauthlib server
     """
+
     def __init__(self, *args, **kwargs):
         self.username = None
         self.user = None
@@ -292,11 +298,11 @@ class LoauthRequestValidator(RequestValidator):
         getLogger(__name__).debug("authenticate_client()")
         bodydict = dict(request.decoded_body)
         if ((request.headers.get('username', '') != '' and
-             request.headers.get('password', '') != '' and
-             request.headers.get('grant_type', '') == 'password') or
+                     request.headers.get('password', '') != '' and
+                     request.headers.get('grant_type', '') == 'password') or
                 (bodydict.get('username') is not None and
-                 bodydict.get('password') is not None and
-                 bodydict.get('grant_type') == 'password')):
+                         bodydict.get('password') is not None and
+                         bodydict.get('grant_type') == 'password')):
 
             getLogger(__name__).info(
                 "This is a localbox special situation. Adding Client based on user/pass")
@@ -385,7 +391,8 @@ class LoauthRequestValidator(RequestValidator):
         sql = "select 1 from bearer_tokens where access_token = ? and client_id = ? and expires > datetime('now');"
         try:
             client_id = self.client.client_id
-        except Error:
+        except Exception as err:
+            getLogger(__name__).error(err)
             client_id = None
         params = token, client_id
         result = database_execute(sql, params)
@@ -414,7 +421,7 @@ class LoauthRequestValidator(RequestValidator):
             *args,
             **kwargs):
         getLogger(__name__).debug("validate_grant_type()")
-        if (grant_type == 'client_credentials'):
+        if grant_type == 'client_credentials':
             sql = "select user from clients where id = ?"
             user = database_execute(sql, (client.client_id,))[0][0]
             return user is not None
@@ -511,7 +518,6 @@ def basic_http_authenticate(
 
 
 class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
-
     """
     handles oauth requests
     """
@@ -520,15 +526,15 @@ class OAuth2HTTPRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):  # pylint: disable=invalid-name
         getLogger(__name__).debug("do_POST()")
-        content_length = int(self.headers.getheader('Content-Length', 0))
+        content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
         credentials = None
         try:
             headers, body, status = self.authserver.create_token_response(
                 self.path, self.command, body, self.headers, credentials)
             self.send_response(status)
-            for key, value in headers.iteritems():
-                self.send_header(key, value)
+            for key in headers.keys():
+                self.send_header(key, headers.get(key))
             self.end_headers()
             self.wfile.write(body)
         except OAuth2Error as error:

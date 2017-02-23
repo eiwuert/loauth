@@ -6,6 +6,9 @@ Install:
 The easiest method from this repository is as follows:
   python setup.py install
 
+Configuration:
+--------------
+
 After installation, a configuration file needs to be created.
 LOauth checks, in order, the following files: /etc/loauth.ini', '~/loauth.ini',
 '~/.config/localbox/config.ini' and 'loauth.ini'.
@@ -21,6 +24,14 @@ loauth program can actually edit that database:
 [database]
 type = sqlite
 filename = /var/lib/loauth/database.sqlite3
+```
+
+You can change the HTTP port where the server listens the request from. See the loauth/defaults.HTTP_PORT for the default value.
+Example:
+
+```ini
+[httpd]
+port = 8000
 ```
 
 Usage:
@@ -55,3 +66,9 @@ terminal instead. Use of the --password parameter is discouraged because shell
 commands are usually logged in a .bash\_history file, and using the --password
 call will then store the password in plain text in said file.
 
+Dependencies:
+-------------
+
+```bash
+sudo apt-get install python-pip python-dev libmysqlclient-dev
+```
